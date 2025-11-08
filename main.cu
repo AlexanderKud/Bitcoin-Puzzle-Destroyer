@@ -222,8 +222,6 @@ __device__ char g_found_hash160[41] = {0};
 __device__ char d_min_hex[65];
 __device__ char d_max_hex[65];
 __device__ int d_hex_length;
-#define ITERATIONS_PER_KERNEL 10
-
 __global__ void start(const uint8_t* target, uint64_t p1, uint64_t p2, uint64_t p3, int total_threads)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -237,31 +235,27 @@ __global__ void start(const uint8_t* target, uint64_t p1, uint64_t p2, uint64_t 
     BigInt priv_batch[BATCH_SIZE];
     uint8_t hash160_batch[BATCH_SIZE][20];
     
-    // Main loop
-    for (int iter = 0; iter < ITERATIONS_PER_KERNEL; ++iter) {
-        
-        // Generate batch of private keys in range [min, max]
-        #pragma unroll
-        for (int i = 0; i < BATCH_SIZE; ++i) {
-            generate_random_in_range(&priv_batch[i], &state, &d_min_bigint, &d_max_bigint);
-            scalar_multiply_multi_base_jac(&result_jac_batch[i], &priv_batch[i]);
-        }
-        
-        // Batch convert to hash160
-        jacobian_batch_to_hash160(result_jac_batch, hash160_batch);
-		
-        // Check results
-        #pragma unroll
-        for (int i = 0; i < BATCH_SIZE; ++i) {
-            if (compare_hash160_fast(hash160_batch[i], target)) {
-                if (atomicCAS((int*)&g_found, 0, 1) == 0) {
-                    bigint_to_hex(&priv_batch[i], g_found_hex);
-                    hash160_to_hex(hash160_batch[i], g_found_hash160);
-                }
-                return;
-            }
-        }
-    }
+	// Generate batch of private keys in range [min, max]
+	#pragma unroll
+	for (int i = 0; i < BATCH_SIZE; ++i) {
+		generate_random_in_range(&priv_batch[i], &state, &d_min_bigint, &d_max_bigint);
+		scalar_multiply_multi_base_jac(&result_jac_batch[i], &priv_batch[i]);
+	}
+	
+	// Batch convert to hash160
+	jacobian_batch_to_hash160(result_jac_batch, hash160_batch);
+	
+	// Check results
+	#pragma unroll
+	for (int i = 0; i < BATCH_SIZE; ++i) {
+		if (compare_hash160_fast(hash160_batch[i], target)) {
+			if (atomicCAS((int*)&g_found, 0, 1) == 0) {
+				bigint_to_hex(&priv_batch[i], g_found_hex);
+				hash160_to_hex(hash160_batch[i], g_found_hash160);
+			}
+			return;
+		}
+	}
 }
 
 bool run_with_quantum_data(const char* min, const char* max, const char* target, int blocks, int threads, int device_id) {
@@ -283,7 +277,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
     int found_flag;
     
     // Calculate keys processed per kernel launch
-    uint64_t keys_per_kernel = (uint64_t)blocks * threads * BATCH_SIZE * ITERATIONS_PER_KERNEL;
+    uint64_t keys_per_kernel = (uint64_t)blocks * threads * BATCH_SIZE;
     
     printf("Searching in range:\n");
     printf("Min: %s\n", min);
@@ -372,7 +366,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
             cudaFree(d_target);
             return true;
         }
-        p3 += 1;
+        p1 += 1;
     }
 }
 
