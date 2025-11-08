@@ -591,3 +591,13 @@ Total keys checked: 671088640
 Time taken: 10.1749 seconds
 Average speed: 65.9555 MK/s
 
+[2025-11-09 01:54:04] Found: 1a96ca8d8 -> 4e15e5189752d1eaf444dfd6bff399feb0443977
+Total keys checked: 1342177280
+Time taken: 18.2373 seconds
+Average speed: 73.5951 MK/s
+
+[2025-11-09 03:05:56] Found: 1a96ca8d8 -> 4e15e5189752d1eaf444dfd6bff399feb0443977
+Total keys checked: 7381975040
+Time taken: 87.1844 seconds
+Average speed: 84.6708 MK/s
+
