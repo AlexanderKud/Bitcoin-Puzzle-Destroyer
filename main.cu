@@ -65,7 +65,7 @@ __device__ __host__ void hex_to_bigint(const char* hex_str, BigInt* bigint) {
 }
 
 // Convert BigInt to hex string - optimized
-__device__ void bigint_to_hex(const BigInt* bigint, char* hex_str) {
+__device__ __host__ void bigint_to_hex(const BigInt* bigint, char* hex_str) {
     const char hex_chars[] = "0123456789abcdef";
     int idx = 0;
     bool leading_zero = true;
@@ -91,13 +91,13 @@ __device__ void bigint_to_hex(const BigInt* bigint, char* hex_str) {
 }
 
 // Optimized byte to hex conversion
-__device__ __forceinline__ void byte_to_hex(uint8_t byte, char* out) {
+__device__ __host__ __forceinline__ void byte_to_hex(uint8_t byte, char* out) {
     const char hex_chars[] = "0123456789abcdef";
     out[0] = hex_chars[(byte >> 4) & 0xF];
     out[1] = hex_chars[byte & 0xF];
 }
 
-__device__ void hash160_to_hex(uint8_t* hash, char* hex_str) {
+__device__ __host__ void hash160_to_hex(uint8_t* hash, char* hex_str) {
     #pragma unroll
     for (int i = 0; i < 20; i++) {
         byte_to_hex(hash[i], &hex_str[i * 2]);
@@ -211,7 +211,6 @@ __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_1
     }
 }
 
-// Global device constants for min/max as BigInt
 __constant__ BigInt d_min_bigint;
 __constant__ BigInt d_max_bigint;
 
@@ -219,33 +218,26 @@ __device__ volatile int g_found = 0;
 __device__ char g_found_hex[65] = {0};
 __device__ char g_found_hash160[41] = {0};
 
-__device__ char d_min_hex[65];
-__device__ char d_max_hex[65];
-__device__ int d_hex_length;
-__global__ void start(const uint8_t* target, uint64_t p1, uint64_t p2, uint64_t p3, int total_threads)
+__global__ void start(const uint8_t* target, uint64_t p1)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     
     // Initialize RNG once
     curandStatePhilox4_32_10_t state;
-    curand_init(p1, p2 + tid, p3, &state);
+    curand_init(p1, tid, 0, &state);
     
-    // Batch storage
     ECPointJac result_jac_batch[BATCH_SIZE];
     BigInt priv_batch[BATCH_SIZE];
     uint8_t hash160_batch[BATCH_SIZE][20];
     
-	// Generate batch of private keys in range [min, max]
 	#pragma unroll
 	for (int i = 0; i < BATCH_SIZE; ++i) {
 		generate_random_in_range(&priv_batch[i], &state, &d_min_bigint, &d_max_bigint);
 		scalar_multiply_multi_base_jac(&result_jac_batch[i], &priv_batch[i]);
 	}
 	
-	// Batch convert to hash160
 	jacobian_batch_to_hash160(result_jac_batch, hash160_batch);
 	
-	// Check results
 	#pragma unroll
 	for (int i = 0; i < BATCH_SIZE; ++i) {
 		if (compare_hash160_fast(hash160_batch[i], target)) {
@@ -288,20 +280,16 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
     printf("Keys per kernel: %llu\n\n", (unsigned long long)keys_per_kernel);
     
     uint64_t p1;
-    uint64_t p2;
-    uint64_t p3;
     // Performance tracking variables
     uint64_t total_keys_checked = 0;
     auto start_time = std::chrono::high_resolution_clock::now();
     auto last_print_time = start_time;
 	BCryptGenRandom(NULL, (PUCHAR)&p1, sizeof(p1), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-	BCryptGenRandom(NULL, (PUCHAR)&p2, sizeof(p2), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-	BCryptGenRandom(NULL, (PUCHAR)&p3, sizeof(p3), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     while(true) {
         auto kernel_start = std::chrono::high_resolution_clock::now();
         
         // Launch kernel
-        start<<<blocks, threads>>>(d_target, p1, p2, p3, total_threads);
+        start<<<blocks, threads>>>(d_target, p1);
         cudaDeviceSynchronize();
         
         auto kernel_end = std::chrono::high_resolution_clock::now();
