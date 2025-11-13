@@ -1,4 +1,4 @@
-// author: https://t.me/biernus
+
 #include "secp256k1.cuh"
 #include <iostream>
 #include <vector>
@@ -26,7 +26,7 @@ __device__ __host__ __forceinline__ uint8_t hex_char_to_byte(char c) {
     return 0;
 }
 
-// Convert hex string to bytes
+
 __device__ __host__ __device__ void hex_string_to_bytes(const char* hex_str, uint8_t* bytes, int num_bytes) {
     #pragma unroll 8
     for (int i = 0; i < num_bytes; i++) {
@@ -36,9 +36,9 @@ __device__ __host__ __device__ void hex_string_to_bytes(const char* hex_str, uin
 }
 
 
-// Convert hex string to BigInt - optimized
+
 __device__ __host__ void hex_to_bigint(const char* hex_str, BigInt* bigint) {
-    // Initialize all data to 0
+    
     #pragma unroll
     for (int i = 0; i < 8; i++) {
         bigint->data[i] = 0;
@@ -47,7 +47,7 @@ __device__ __host__ void hex_to_bigint(const char* hex_str, BigInt* bigint) {
     int len = 0;
     while (hex_str[len] != '\0' && len < 64) len++;
     
-    // Process hex string from right to left
+    
     int word_idx = 0;
     int bit_offset = 0;
     
@@ -64,13 +64,13 @@ __device__ __host__ void hex_to_bigint(const char* hex_str, BigInt* bigint) {
     }
 }
 
-// Convert BigInt to hex string - optimized
+
 __device__ void bigint_to_hex(const BigInt* bigint, char* hex_str) {
     const char hex_chars[] = "0123456789abcdef";
     int idx = 0;
     bool leading_zero = true;
     
-    // Process from most significant word to least
+    
     #pragma unroll
     for (int i = 7; i >= 0; i--) {
         for (int j = 28; j >= 0; j -= 4) {
@@ -82,7 +82,7 @@ __device__ void bigint_to_hex(const BigInt* bigint, char* hex_str) {
         }
     }
     
-    // Handle case where number is 0
+    
     if (idx == 0) {
         hex_str[idx++] = '0';
     }
@@ -90,7 +90,7 @@ __device__ void bigint_to_hex(const BigInt* bigint, char* hex_str) {
     hex_str[idx] = '\0';
 }
 
-// Optimized byte to hex conversion
+
 __device__ __forceinline__ void byte_to_hex(uint8_t byte, char* out) {
     const char hex_chars[] = "0123456789abcdef";
     out[0] = hex_chars[(byte >> 4) & 0xF];
@@ -130,93 +130,77 @@ __device__ void hash160_to_hex(const uint8_t *hash, char *out_hex) {
     out_hex[40] = '\0';
 }
 
-__device__ bool is_zero_bigint(const BigInt* num) {
-    bool is_zero = true;
-    #pragma unroll
-    for (int i = 0; i < BIGINT_WORDS; ++i) {
-        if (num->data[i] != 0) {
-            is_zero = false;
-            
-            
-        }
-    }
-    return is_zero;
-}
+
 __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_10_t* state, 
                                          const BigInt* min_val, const BigInt* max_val) {
     
     BigInt range;
     bool borrow = false;
+    
     #pragma unroll
     for (int i = 0; i < BIGINT_WORDS; ++i) {
         uint64_t diff = (uint64_t)max_val->data[i] - (uint64_t)min_val->data[i] - (borrow ? 1 : 0);
         range.data[i] = (uint32_t)diff;
         borrow = (diff > 0xFFFFFFFFULL);
     }
-
     
     
-    
-    if (is_zero_bigint(&range)) {
-        #pragma unroll
-        for (int i = 0; i < BIGINT_WORDS; ++i) {
-            result->data[i] = min_val->data[i];
-        }
-        return;
-    }
-    
-    
-    
-    
-    int highest_word_idx = BIGINT_WORDS - 1;
-    #pragma unroll
-    for (int i = BIGINT_WORDS - 1; i >= 0; --i) {
-        
-        if (range.data[i] != 0) {
-            highest_word_idx = i;
-            break;
-        }
-    }
-
-    
-    
-    uint32_t mask = range.data[highest_word_idx];
-    mask |= mask >> 1;
-    mask |= mask >> 2;
-    mask |= mask >> 4;
-    mask |= mask >> 8;
-    mask |= mask >> 16;
-
     BigInt random;
+    for (int w = 0; w < BIGINT_WORDS; w += 4) {
+        uint4 r = curand4(state);
+        if (w + 0 < BIGINT_WORDS) random.data[w + 0] = r.x;
+        if (w + 1 < BIGINT_WORDS) random.data[w + 1] = r.y;
+        if (w + 2 < BIGINT_WORDS) random.data[w + 2] = r.z;
+        if (w + 3 < BIGINT_WORDS) random.data[w + 3] = r.w;
+    }
     
     
-    do {
+    
+    
+    
+    
+    
+    
+    int highest_word = BIGINT_WORDS - 1;
+    while (highest_word >= 0 && range.data[highest_word] == 0) {
+        highest_word--;
+    }
+    
+    if (highest_word >= 0) {
         
-        for (int w = 0; w < BIGINT_WORDS; w += 4) {
-            uint4 r = curand4(state);
-            if (w + 0 < BIGINT_WORDS) random.data[w + 0] = r.x;
-            if (w + 1 < BIGINT_WORDS) random.data[w + 1] = r.y;
-            if (w + 2 < BIGINT_WORDS) random.data[w + 2] = r.z;
-            if (w + 3 < BIGINT_WORDS) random.data[w + 3] = r.w;
+        uint32_t mask = range.data[highest_word];
+        mask |= mask >> 1;
+        mask |= mask >> 2;
+        mask |= mask >> 4;
+        mask |= mask >> 8;
+        mask |= mask >> 16;
+        
+        random.data[highest_word] &= mask;
+        
+        
+        for (int i = highest_word + 1; i < BIGINT_WORDS; ++i) {
+            random.data[i] = 0;
         }
-
         
         
-        
-        #pragma unroll
-        for (int i = 0; i < BIGINT_WORDS; ++i) {
-            
-            if (i > highest_word_idx) {
-                random.data[i] = 0;
-            } else if (i == highest_word_idx) {
-                random.data[i] &= mask;
+        bool greater = false;
+        for (int i = BIGINT_WORDS - 1; i >= 0; --i) {
+            if (random.data[i] > range.data[i]) {
+                greater = true;
+                break;
+            } else if (random.data[i] < range.data[i]) {
+                break;
             }
         }
-
+        
+        if (greater) {
+            
+            for (int i = 0; i < BIGINT_WORDS; ++i) {
+                random.data[i] = random.data[i] % (range.data[i] + 1);
+            }
+        }
+    }
     
-    
-    } while (compare_bigint(&random, &range) > 0);
-
     
     bool carry = false;
     #pragma unroll
@@ -227,7 +211,7 @@ __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_1
     }
 }
 
-// Global device constants for min/max as BigInt
+
 __constant__ BigInt d_min_bigint;
 __constant__ BigInt d_max_bigint;
 
@@ -235,35 +219,30 @@ __device__ volatile int g_found = 0;
 __device__ char g_found_hex[65] = {0};
 __device__ char g_found_hash160[41] = {0};
 
-__device__ char d_min_hex[65];
-__device__ char d_max_hex[65];
-__device__ int d_hex_length;
 __global__ void start(const uint8_t* target, uint64_t p1, uint64_t p2, uint64_t p3, int total_threads)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     
-    // Initialize RNG once
-    curandStatePhilox4_32_10_t state;
-    curand_init(p1, p2 + tid, p3, &state);
     
-    // Batch storage
+    curandStatePhilox4_32_10_t state;
+    curand_init(p1, tid, clock64(), &state);
+    
+    
     ECPointJac result_jac_batch[BATCH_SIZE];
     BigInt priv_batch[BATCH_SIZE];
     uint8_t hash160_batch[BATCH_SIZE][20];
     
 	
-	
-	// Generate batch of private keys in range [min, max]
 	#pragma unroll
 	for (int i = 0; i < BATCH_SIZE; ++i) {
 		generate_random_in_range(&priv_batch[i], &state, &d_min_bigint, &d_max_bigint);
 		scalar_multiply_multi_base_jac(&result_jac_batch[i], &priv_batch[i]);
 	}
 	
-	// Batch convert to hash160
+	
 	jacobian_batch_to_hash160(result_jac_batch, hash160_batch);
 	
-	// Check results
+	
 	#pragma unroll
 	for (int i = 0; i < BATCH_SIZE; ++i) {
 		if (compare_hash160_fast(hash160_batch[i], target)) {
@@ -283,7 +262,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
     cudaMalloc(&d_target, 20);
     cudaMemcpy(d_target, shared_target, 20, cudaMemcpyHostToDevice);
     
-    // Convert min and max hex strings to BigInt and copy to device
+    
     BigInt min_bigint, max_bigint;
     hex_to_bigint(min, &min_bigint);
     hex_to_bigint(max, &max_bigint);
@@ -294,7 +273,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
     int total_threads = blocks * threads;
     int found_flag;
     
-    // Calculate keys processed per kernel launch
+    
     uint64_t keys_per_kernel = (uint64_t)blocks * threads * BATCH_SIZE;
     
     printf("Searching in range:\n");
@@ -308,7 +287,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
     uint64_t p1;
     uint64_t p2;
     uint64_t p3;
-    // Performance tracking variables
+    
     uint64_t total_keys_checked = 0;
     auto start_time = std::chrono::high_resolution_clock::now();
     auto last_print_time = start_time;
@@ -318,19 +297,19 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
     while(true) {
         auto kernel_start = std::chrono::high_resolution_clock::now();
         
-        // Launch kernel
+        
         start<<<blocks, threads>>>(d_target, p1, p2, p3, total_threads);
         cudaDeviceSynchronize();
         
         auto kernel_end = std::chrono::high_resolution_clock::now();
         
-        // Calculate kernel execution time
+        
         double kernel_time = std::chrono::duration<double>(kernel_end - kernel_start).count();
         
-        // Update counters
+        
         total_keys_checked += keys_per_kernel;
         
-        // Print performance stats every second
+        
         auto current_time = std::chrono::high_resolution_clock::now();
         double elapsed_since_print = std::chrono::duration<double>(current_time - last_print_time).count();
         
@@ -345,7 +324,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
             last_print_time = current_time;
         }
         
-        // Check if key was found
+        
         cudaMemcpyFromSymbol(&found_flag, g_found, sizeof(int));
         if (found_flag) {
             printf("\n\n");
@@ -397,7 +376,7 @@ int main(int argc, char* argv[]) {
     int threads = 256;
     int device_id = (argc > 4) ? std::stoi(argv[4]) : 0;
     
-    // Set GPU device
+    
     cudaSetDevice(device_id);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
@@ -405,7 +384,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Validate input lengths match
+    
     if (strlen(argv[1]) != strlen(argv[2])) {
         std::cerr << "Error: min and max must have the same length" << std::endl;
         return 1;

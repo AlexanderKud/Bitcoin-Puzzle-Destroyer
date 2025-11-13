@@ -1,4 +1,4 @@
-// author: https://t.me/biernus
+
 #include <iostream>
 #include <cuda_runtime.h>
 #include <stdint.h>
@@ -756,9 +756,9 @@ __device__ __forceinline__ void add_point_jac(ECPointJac *R, const ECPointJac *P
     R->infinity = false;
 }
 
-// Optimized SHA-256 implementation for CUDA
 
-// Use constant memory for K constants (better caching)
+
+
 __constant__ uint32_t c_K[64] = {
     0x428a2f98ul,0x71374491ul,0xb5c0fbcful,0xe9b5dba5ul,
     0x3956c25bul,0x59f111f1ul,0x923f82a4ul,0xab1c5ed5ul,
@@ -778,12 +778,12 @@ __constant__ uint32_t c_K[64] = {
     0x90befffaul,0xa4506cebul,0xbef9a3f7ul,0xc67178f2ul
 };
 
-// Inline rotate right
+
 __device__ __forceinline__ uint32_t rotr(uint32_t x, int n) {
     return (x >> n) | (x << (32 - n));
 }
 
-// Inline SHA-256 functions
+
 __device__ __forceinline__ uint32_t Ch(uint32_t x, uint32_t y, uint32_t z) {
     return (x & y) ^ (~x & z);
 }
@@ -809,7 +809,7 @@ __device__ __forceinline__ uint32_t sigma1(uint32_t x) {
 }
 
 __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
-    // Initialize hash values
+    
     uint32_t h0 = 0x6a09e667ul;
     uint32_t h1 = 0xbb67ae85ul;
     uint32_t h2 = 0x3c6ef372ul;
@@ -819,14 +819,14 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
     uint32_t h6 = 0x1f83d9abul;
     uint32_t h7 = 0x5be0cd19ul;
     
-    // Message schedule array
+    
     uint32_t w[64];
     
-    // Prepare message block - load data directly into w[0..15]
+    
     
     for (int i = 0; i < 16; ++i) {
         if (i * 4 < len) {
-            // Load available bytes
+            
             uint32_t val = 0;
             
             for (int j = 0; j < 4; ++j) {
@@ -834,32 +834,32 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
                 if (idx < len) {
                     val |= ((uint32_t)data[idx]) << (24 - j * 8);
                 } else if (idx == len) {
-                    val |= 0x80u << (24 - j * 8);  // Append bit '1'
+                    val |= 0x80u << (24 - j * 8);  
                 }
             }
             w[i] = val;
         } else if (i * 4 == len) {
-            w[i] = 0x80000000u;  // Padding starts here
+            w[i] = 0x80000000u;  
         } else if (i == 14) {
-            w[i] = 0;  // Upper 32 bits of length (always 0 for len < 512MB)
+            w[i] = 0;  
         } else if (i == 15) {
-            w[i] = (uint32_t)(len * 8);  // Lower 32 bits of bit length
+            w[i] = (uint32_t)(len * 8);  
         } else {
             w[i] = 0;
         }
     }
     
-    // Extend the first 16 words into the remaining 48 words
+    
     
     for (int i = 16; i < 64; ++i) {
         w[i] = sigma1(w[i - 2]) + w[i - 7] + sigma0(w[i - 15]) + w[i - 16];
     }
     
-    // Initialize working variables
+    
     uint32_t a = h0, b = h1, c = h2, d = h3;
     uint32_t e = h4, f = h5, g = h6, h = h7;
     
-    // Main compression loop - fully unrolled
+    
     
     for (int i = 0; i < 64; ++i) {
         uint32_t T1 = h + Sigma1(e) + Ch(e, f, g) + c_K[i] + w[i];
@@ -874,7 +874,7 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
         a = T1 + T2;
     }
     
-    // Add compressed chunk to current hash value
+    
     h0 += a;
     h1 += b;
     h2 += c;
@@ -884,7 +884,7 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
     h6 += g;
     h7 += h;
     
-    // Produce final hash (big-endian)
+    
     
     for (int i = 0; i < 4; ++i) {
         hash[i]      = (h0 >> (24 - i * 8)) & 0xFF;
@@ -898,9 +898,9 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
     }
 }
 
-// Optimized RIPEMD-160 implementation for CUDA
 
-// Use constant memory for lookup tables (cached and broadcast efficiently)
+
+
 __constant__ uint32_t c_K1[5] = {0x00000000, 0x5A827999, 0x6ED9EBA1, 0x8F1BBCDC, 0xA953FD4E};
 __constant__ uint32_t c_K2[5] = {0x50A28BE6, 0x5C4DD124, 0x6D703EF3, 0x7A6D76E9, 0x00000000};
 
@@ -936,7 +936,7 @@ __constant__ int c_SR[80] = {
     8, 5, 12, 9, 12, 5, 14, 6, 8, 13, 6, 5, 15, 13, 11, 11
 };
 
-// Inline device functions for F operations
+
 __device__ __forceinline__ uint32_t F(uint32_t x, uint32_t y, uint32_t z) {
     return x ^ y ^ z;
 }
@@ -961,7 +961,7 @@ __device__ __forceinline__ uint32_t ROL(uint32_t x, int n) {
     return (x << n) | (x >> (32 - n));
 }
 
-// Macro to reduce code repetition
+
 #define ROUND(a, b, c, d, e, func, x, s, k) \
     do { \
         uint32_t t = a + func(b, c, d) + x + k; \
@@ -974,17 +974,17 @@ __device__ __forceinline__ uint32_t ROL(uint32_t x, int n) {
     } while(0)
 
 __device__ void ripemd160(const uint8_t* msg, uint8_t* out) {
-    // Initialize hash values
+    
     uint32_t h0 = 0x67452301;
     uint32_t h1 = 0xEFCDAB89;
     uint32_t h2 = 0x98BADCFE;
     uint32_t h3 = 0x10325476;
     uint32_t h4 = 0xC3D2E1F0;
     
-    // Prepare message block (32 bytes + padding)
+    
     uint32_t X[16];
     
-    // Load message with coalesced memory access pattern
+    
     
     for (int i = 0; i < 8; i++) {
         X[i] = ((uint32_t)msg[i*4]) | 
@@ -993,82 +993,82 @@ __device__ void ripemd160(const uint8_t* msg, uint8_t* out) {
                ((uint32_t)msg[i*4 + 3] << 24);
     }
     
-    // Padding
-    X[8] = 0x00000080;  // Append bit '1' and zeros
+    
+    X[8] = 0x00000080;  
     X[9] = 0;
     X[10] = 0;
     X[11] = 0;
     X[12] = 0;
     X[13] = 0;
-    X[14] = 256;  // Length in bits (32 bytes = 256 bits)
+    X[14] = 256;  
     X[15] = 0;
     
-    // Working variables
+    
     uint32_t AL = h0, BL = h1, CL = h2, DL = h3, EL = h4;
     uint32_t AR = h0, BR = h1, CR = h2, DR = h3, ER = h4;
     
-    // Main rounds - fully unrolled to eliminate branching
-    // Left rounds (0-15) - F function
+    
+    
     
     for (int j = 0; j < 16; j++) {
         ROUND(AL, BL, CL, DL, EL, F, X[c_ZL[j]], c_SL[j], c_K1[0]);
     }
     
-    // Left rounds (16-31) - G function
+    
     
     for (int j = 16; j < 32; j++) {
         ROUND(AL, BL, CL, DL, EL, G, X[c_ZL[j]], c_SL[j], c_K1[1]);
     }
     
-    // Left rounds (32-47) - H function
+    
     
     for (int j = 32; j < 48; j++) {
         ROUND(AL, BL, CL, DL, EL, H, X[c_ZL[j]], c_SL[j], c_K1[2]);
     }
     
-    // Left rounds (48-63) - I function
+    
     
     for (int j = 48; j < 64; j++) {
         ROUND(AL, BL, CL, DL, EL, I, X[c_ZL[j]], c_SL[j], c_K1[3]);
     }
     
-    // Left rounds (64-79) - J function
+    
     
     for (int j = 64; j < 80; j++) {
         ROUND(AL, BL, CL, DL, EL, J, X[c_ZL[j]], c_SL[j], c_K1[4]);
     }
     
-    // Right rounds (0-15) - J function (reversed)
+    
     
     for (int j = 0; j < 16; j++) {
         ROUND(AR, BR, CR, DR, ER, J, X[c_ZR[j]], c_SR[j], c_K2[0]);
     }
     
-    // Right rounds (16-31) - I function (reversed)
+    
     
     for (int j = 16; j < 32; j++) {
         ROUND(AR, BR, CR, DR, ER, I, X[c_ZR[j]], c_SR[j], c_K2[1]);
     }
     
-    // Right rounds (32-47) - H function (reversed)
+    
     
     for (int j = 32; j < 48; j++) {
         ROUND(AR, BR, CR, DR, ER, H, X[c_ZR[j]], c_SR[j], c_K2[2]);
     }
     
-    // Right rounds (48-63) - G function (reversed)
+    
     
     for (int j = 48; j < 64; j++) {
         ROUND(AR, BR, CR, DR, ER, G, X[c_ZR[j]], c_SR[j], c_K2[3]);
     }
     
-    // Right rounds (64-79) - F function (reversed)
+    
     
     for (int j = 64; j < 80; j++) {
         ROUND(AR, BR, CR, DR, ER, F, X[c_ZR[j]], c_SR[j], c_K2[4]);
     }
     
-    // Finalization
+    
     uint32_t T = h1 + CL + DR;
     h1 = h2 + DL + ER;
     h2 = h3 + EL + AR;
@@ -1076,7 +1076,7 @@ __device__ void ripemd160(const uint8_t* msg, uint8_t* out) {
     h4 = h0 + BL + CR;
     h0 = T;
     
-    // Write output - preserve little-endian byte order
+    
     
     for (int i = 0; i < 4; i++) {
         out[i]      = (h0 >> (i * 8)) & 0xFF;
@@ -1129,11 +1129,11 @@ __device__ void jacobian_to_hash160_direct(const ECPointJac *P, uint8_t hash160_
     }
 
     
-    // Do:
+    
     uint8_t full_hash[20];
     hash160(pubkey, 33, full_hash);
     
-    // Copy only first 10 bytes
+    
     
     for (int i = 0; i < 10; i++) {
         hash160_out[i] = full_hash[i];
@@ -1308,7 +1308,7 @@ __device__ void jacobian_batch_to_hash160(const ECPointJac points[BATCH_SIZE], u
     }
 }
 
-// Kernel 1: Generate base points (sequential, unavoidable)
+
 __global__ void generate_base_points_kernel() {
     if (threadIdx.x == 0) {
         point_copy_jac(&G_base_points[0], &const_G_jacobian);
@@ -1323,7 +1323,7 @@ __global__ void generate_base_points_kernel() {
     }
 }
 
-// Kernel 2: Build tables in parallel (one block per base point)
+
 __global__ void build_precomp_tables_kernel() {
     int base_idx = blockIdx.x;
     if (base_idx >= NUM_BASE_POINTS) return;
@@ -1332,7 +1332,7 @@ __global__ void build_precomp_tables_kernel() {
         point_set_infinity_jac(&G_base_precomp[base_idx][0]);
         point_copy_jac(&G_base_precomp[base_idx][1], &G_base_points[base_idx]);
         
-        // Sequential within each block - dependencies require this
+        
         for (int i = 2; i < (1 << WINDOW_SIZE); i++) {
             add_point_jac(&G_base_precomp[base_idx][i], 
                          &G_base_precomp[base_idx][i-1], 
@@ -1358,7 +1358,7 @@ __global__ void precompute_G_kernel_parallel() {
     
     if (idx >= TABLE_SIZE) return;
     
-    // Compute idx×G using double-and-add
+    
     ECPointJac result;
     point_set_infinity_jac(&result);
     
@@ -1489,12 +1489,12 @@ void init_gpu_constants() {
     printf("Precomputation complete and verified.\n");
 }
 
-// OPTIMIZED: Specialized version for adding G (where G.Z = 1) to any point P
+
 __device__ __forceinline__ void add_G_to_point_jac(ECPointJac *R, const ECPointJac *P) {
-    // Since G.Z = 1, many operations simplify:
-    // Z2Z2 = 1, Z2^3 = 1
-    // U2 = G.X * Z1^2
-    // S2 = G.Y * Z1^3
+    
+    
+    
+    
     
     if (__builtin_expect(P->infinity, 0)) { 
         point_copy_jac(R, &const_G_jacobian); 
@@ -1504,22 +1504,22 @@ __device__ __forceinline__ void add_G_to_point_jac(ECPointJac *R, const ECPointJ
     BigInt Z1Z1, Z1Z1Z1, U1, U2, H, S1, S2, R_big;
     BigInt H2, H3, U1H2, R2, temp;
     
-    // Step 1: Z1^2 (only need to compute P's Z squared)
+    
     mul_mod_device(&Z1Z1, &P->Z, &P->Z);
     
-    // Step 2: U1 = P.X, U2 = G.X * Z1^2
+    
     copy_bigint(&U1, &P->X);
     mul_mod_device(&U2, &const_G_jacobian.X, &Z1Z1);
     
-    // Step 3: H = U2 - U1
+    
     sub_mod_device_fast(&H, &U2, &U1);
     
-    // Fast check for point doubling (extremely rare with random points)
+    
     if (__builtin_expect(is_zero(&H), 0)) {
-        // Z1^3 for S comparison
+        
         mul_mod_device(&Z1Z1Z1, &Z1Z1, &P->Z);
         
-        // S1 = P.Y, S2 = G.Y * Z1^3
+        
         copy_bigint(&S1, &P->Y);
         mul_mod_device(&S2, &const_G_jacobian.Y, &Z1Z1Z1);
         
@@ -1531,39 +1531,39 @@ __device__ __forceinline__ void add_G_to_point_jac(ECPointJac *R, const ECPointJ
         return;
     }
     
-    // Main addition case
-    // Z1^3 = Z1^2 * Z1
+    
+    
     mul_mod_device(&Z1Z1Z1, &Z1Z1, &P->Z);
     
-    // S1 = P.Y, S2 = G.Y * Z1^3
+    
     copy_bigint(&S1, &P->Y);
     mul_mod_device(&S2, &const_G_jacobian.Y, &Z1Z1Z1);
     
-    // R = S2 - S1
+    
     sub_mod_device_fast(&R_big, &S2, &S1);
     
-    // H^2 and H^3
+    
     mul_mod_device(&H2, &H, &H);
     mul_mod_device(&H3, &H2, &H);
     
-    // U1*H^2
+    
     mul_mod_device(&U1H2, &U1, &H2);
     
-    // R^2
+    
     mul_mod_device(&R2, &R_big, &R_big);
     
-    // X3 = R^2 - H^3 - 2*U1*H^2
+    
     sub_mod_device_fast(&R->X, &R2, &H3);
     sub_mod_device_fast(&R->X, &R->X, &U1H2);
     sub_mod_device_fast(&R->X, &R->X, &U1H2);
     
-    // Y3 = R*(U1*H^2 - X3) - S1*H^3
+    
     sub_mod_device_fast(&temp, &U1H2, &R->X);
     mul_mod_device(&temp, &R_big, &temp);
     mul_mod_device(&S1, &S1, &H3);
     sub_mod_device_fast(&R->Y, &temp, &S1);
     
-    // Z3 = Z1*H (since G.Z = 1)
+    
     mul_mod_device(&R->Z, &P->Z, &H);
     
     R->infinity = false;
