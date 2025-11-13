@@ -1,4 +1,3 @@
-
 #include "secp256k1.cuh"
 #include <iostream>
 #include <vector>
@@ -28,7 +27,7 @@ __device__ __host__ __forceinline__ uint8_t hex_char_to_byte(char c) {
 
 
 __device__ __host__ __device__ void hex_string_to_bytes(const char* hex_str, uint8_t* bytes, int num_bytes) {
-    #pragma unroll 8
+    
     for (int i = 0; i < num_bytes; i++) {
         bytes[i] = (hex_char_to_byte(hex_str[i * 2]) << 4) | 
                    hex_char_to_byte(hex_str[i * 2 + 1]);
@@ -39,7 +38,7 @@ __device__ __host__ __device__ void hex_string_to_bytes(const char* hex_str, uin
 
 __device__ __host__ void hex_to_bigint(const char* hex_str, BigInt* bigint) {
     
-    #pragma unroll
+    
     for (int i = 0; i < 8; i++) {
         bigint->data[i] = 0;
     }
@@ -71,7 +70,7 @@ __device__ void bigint_to_hex(const BigInt* bigint, char* hex_str) {
     bool leading_zero = true;
     
     
-    #pragma unroll
+    
     for (int i = 7; i >= 0; i--) {
         for (int j = 28; j >= 0; j -= 4) {
             uint8_t nibble = (bigint->data[i] >> j) & 0xF;
@@ -98,7 +97,7 @@ __device__ __forceinline__ void byte_to_hex(uint8_t byte, char* out) {
 }
 
 __device__ void hash160_to_hex(uint8_t* hash, char* hex_str) {
-    #pragma unroll
+    
     for (int i = 0; i < 20; i++) {
         byte_to_hex(hash[i], &hex_str[i * 2]);
     }
@@ -137,7 +136,7 @@ __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_1
     BigInt range;
     bool borrow = false;
     
-    #pragma unroll
+    
     for (int i = 0; i < BIGINT_WORDS; ++i) {
         uint64_t diff = (uint64_t)max_val->data[i] - (uint64_t)min_val->data[i] - (borrow ? 1 : 0);
         range.data[i] = (uint32_t)diff;
@@ -153,13 +152,6 @@ __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_1
         if (w + 2 < BIGINT_WORDS) random.data[w + 2] = r.z;
         if (w + 3 < BIGINT_WORDS) random.data[w + 3] = r.w;
     }
-    
-    
-    
-    
-    
-    
-    
     
     int highest_word = BIGINT_WORDS - 1;
     while (highest_word >= 0 && range.data[highest_word] == 0) {
@@ -203,7 +195,7 @@ __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_1
     
     
     bool carry = false;
-    #pragma unroll
+    
     for (int i = 0; i < BIGINT_WORDS; ++i) {
         uint64_t sum = (uint64_t)random.data[i] + (uint64_t)min_val->data[i] + (carry ? 1 : 0);
         result->data[i] = (uint32_t)sum;
@@ -219,13 +211,13 @@ __device__ volatile int g_found = 0;
 __device__ char g_found_hex[65] = {0};
 __device__ char g_found_hash160[41] = {0};
 
-__global__ void start(const uint8_t* target, uint64_t p1, uint64_t p2, uint64_t p3, int total_threads)
+__global__ void start(const uint8_t* target, uint64_t seed)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     
     
     curandStatePhilox4_32_10_t state;
-    curand_init(p1, tid, clock64(), &state);
+    curand_init(tid, clock64(), seed, &state);
     
     
     ECPointJac result_jac_batch[BATCH_SIZE];
@@ -233,7 +225,7 @@ __global__ void start(const uint8_t* target, uint64_t p1, uint64_t p2, uint64_t 
     uint8_t hash160_batch[BATCH_SIZE][20];
     
 	
-	#pragma unroll
+
 	for (int i = 0; i < BATCH_SIZE; ++i) {
 		generate_random_in_range(&priv_batch[i], &state, &d_min_bigint, &d_max_bigint);
 		scalar_multiply_multi_base_jac(&result_jac_batch[i], &priv_batch[i]);
@@ -241,9 +233,15 @@ __global__ void start(const uint8_t* target, uint64_t p1, uint64_t p2, uint64_t 
 	
 	
 	jacobian_batch_to_hash160(result_jac_batch, hash160_batch);
+	if (tid == 0) {
+		char hash160_str[41];
+		char hex_key[65];
+		bigint_to_hex(&priv_batch[0], hex_key);
+		hash160_to_hex(hash160_batch[0], hash160_str);
+		printf("Thread %d %s -> %s\n", tid, hex_key, hash160_str);
+	}
+
 	
-	
-	#pragma unroll
 	for (int i = 0; i < BATCH_SIZE; ++i) {
 		if (compare_hash160_fast(hash160_batch[i], target)) {
 			if (atomicCAS((int*)&g_found, 0, 1) == 0) {
@@ -253,6 +251,8 @@ __global__ void start(const uint8_t* target, uint64_t p1, uint64_t p2, uint64_t 
 			return;
 		}
 	}
+	
+	
 }
 
 bool run_with_quantum_data(const char* min, const char* max, const char* target, int blocks, int threads, int device_id) {
@@ -284,21 +284,21 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
     printf("Total threads: %d\n", total_threads);
     printf("Keys per kernel: %llu\n\n", (unsigned long long)keys_per_kernel);
     
-    uint64_t p1;
-    uint64_t p2;
-    uint64_t p3;
+    uint64_t seed;
     
     uint64_t total_keys_checked = 0;
     auto start_time = std::chrono::high_resolution_clock::now();
     auto last_print_time = start_time;
-	BCryptGenRandom(NULL, (PUCHAR)&p1, sizeof(p1), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-	BCryptGenRandom(NULL, (PUCHAR)&p2, sizeof(p2), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-	BCryptGenRandom(NULL, (PUCHAR)&p3, sizeof(p3), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+	BCryptGenRandom(NULL, (PUCHAR)&seed, sizeof(seed), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     while(true) {
         auto kernel_start = std::chrono::high_resolution_clock::now();
         
         
-        start<<<blocks, threads>>>(d_target, p1, p2, p3, total_threads);
+        start<<<blocks, threads>>>(d_target, seed);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "CUDA kernel launch error at %s:%d - %s\n", __FILE__, __LINE__, cudaGetErrorString(err));
+		}
         cudaDeviceSynchronize();
         
         auto kernel_end = std::chrono::high_resolution_clock::now();
@@ -316,7 +316,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
         if (elapsed_since_print >= 1.0) {
             double current_kps = keys_per_kernel / kernel_time;
             
-            printf("\rSpeed: %.2f MK/s | Total: %.2f B keys",
+            printf("\rSpeed: %.2f MK/s | Total: %.2f B keys | ",
                    current_kps / 1000000.0,
                    total_keys_checked / 1000000000.0);
             fflush(stdout);
@@ -363,7 +363,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
             cudaFree(d_target);
             return true;
         }
-        p1 += 1;
+        seed += 1;
     }
 }
 
