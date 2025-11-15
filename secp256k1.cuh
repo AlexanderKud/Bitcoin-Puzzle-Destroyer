@@ -123,69 +123,7 @@ __device__ __forceinline__ void point_copy_jac(ECPointJac *dest, const ECPointJa
     dest->infinity = src->infinity;
 }
 
-
-
 __device__ __forceinline__ void sub_mod_device_fast(BigInt *res, const BigInt *a, const BigInt *b);
-
-
-__device__ __forceinline__ bool bigint_is_even(const BigInt *a) {
-    return (a->data[0] & 1u) == 0u;
-}
-
-__device__ __forceinline__ void bigint_rshift1(BigInt *a) {
-    uint32_t carry = 0;
-    for (int i = BIGINT_WORDS - 1; i >= 0; --i) {
-        uint32_t new_carry = a->data[i] & 1u;
-        a->data[i] = (a->data[i] >> 1) | (carry << 31);
-        carry = new_carry;
-    }
-}
-
-
-__device__ __forceinline__ int bigint_ctz(const BigInt *a) {
-    int count = 0;
-    for (int i = 0; i < BIGINT_WORDS; ++i) {
-        uint32_t w = a->data[i];
-        if (w == 0) { count += 32; continue; }
-        
-        unsigned c;
-        asm volatile("brev.b32 %0, %1;\n\tclz.b32 %0, %0;" : "=r"(c) : "r"(w));
-        return count + (int)c;
-    }
-    return 256; 
-}
-
-
-__device__ __forceinline__ void bigint_rshift_k(BigInt *a, int k) {
-    if (k <= 0) return;
-    if (k >= 256) { init_bigint(a, 0); return; }
-    int word = k >> 5;
-    int bits = k & 31;
-    if (word) {
-        for (int i = 0; i < BIGINT_WORDS - word; ++i) a->data[i] = a->data[i + word];
-        for (int i = BIGINT_WORDS - word; i < BIGINT_WORDS; ++i) a->data[i] = 0;
-    }
-    if (bits) {
-        uint32_t prev = 0;
-        for (int i = BIGINT_WORDS - 1; i >= 0; --i) {
-            uint32_t cur = a->data[i];
-            a->data[i] = (cur >> bits) | (prev << (32 - bits));
-            prev = cur;
-        }
-    }
-}
-
-__device__ __forceinline__ void halve_mod_p(BigInt *x) {
-    if (!bigint_is_even(x)) {
-        
-        ptx_u256Add(x, x, &const_p);
-    }
-    bigint_rshift1(x);
-    
-    if (compare_bigint(x, &const_p) >= 0) {
-        ptx_u256Sub(x, x, &const_p);
-    }
-}
 
 
 __device__ __forceinline__ void bigint_sub_nored(BigInt *r, const BigInt *a, const BigInt *b) {
