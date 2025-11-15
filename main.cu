@@ -217,7 +217,7 @@ __global__ void start(const uint8_t* target, uint64_t seed)
     
     
     curandStatePhilox4_32_10_t state;
-    curand_init(tid, clock64(), seed, &state);
+    curand_init(seed, tid, clock64(), &state);
     
     
     ECPointJac result_jac_batch[BATCH_SIZE];
