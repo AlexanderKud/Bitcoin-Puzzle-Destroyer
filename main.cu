@@ -235,13 +235,13 @@ __global__ void start(uint64_t seed)
 	
 	jacobian_batch_to_hash160(result_jac_batch, hash160_batch);
 	
-	//if (tid == 0) {
-	//	char hash160_str[41];
-	//	char hex_key[65];
-	//	bigint_to_hex(&priv_batch[0], hex_key);
-	//	hash160_to_hex(hash160_batch[0], hash160_str);
-	//	printf("Thread %d %s -> %s\n", tid, hex_key, hash160_str);
-	//}
+	if (tid == 0) {
+		char hash160_str[41];
+		char hex_key[65];
+		bigint_to_hex(&priv_batch[0], hex_key);
+		hash160_to_hex(hash160_batch[0], hash160_str);
+		printf("Thread %d %s -> %s\n", tid, hex_key, hash160_str);
+	}
 	
 	// Unrolled comparison loop with constant memory target
 	#pragma unroll
@@ -357,7 +357,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
                 double total_time = std::chrono::duration<double>(current_time - start_time).count();
                 double current_kps = total_keys_checked / total_time;
                 
-                printf("\rSpeed: %.2f MK/s | Total: %.2f B keys | ",
+                printf("\rSpeed: %.2f MK/s | Total: %.2f B keys\n",
                        current_kps / 1000000.0,
                        total_keys_checked / 1000000000.0);
                 fflush(stdout);
