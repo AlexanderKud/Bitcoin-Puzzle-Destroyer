@@ -6,7 +6,7 @@
 #define BIGINT_WORDS 8
 #define WINDOW_SIZE 16
 #define NUM_BASE_POINTS 16
-#define BATCH_SIZE 128
+#define BATCH_SIZE 200
 #define MOD_EXP 4
 
 
@@ -321,7 +321,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     
     
     uint32_t result[9];
-    #pragma unroll
+    
     for (int i = 0; i < BIGINT_WORDS; i++) {
         result[i] = product[i];
     }
@@ -330,7 +330,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     
     uint64_t c = 0;
     
-    #pragma unroll
+    
     for (int i = 0; i < BIGINT_WORDS; i++) {
         uint32_t lo977, hi977;
         asm volatile(
@@ -350,7 +350,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     
     c = 0;
     
-    #pragma unroll
+    
     for (int i = 0; i < BIGINT_WORDS; i++) {
         uint64_t sum = (uint64_t)result[i + 1] + (uint64_t)product[8 + i] + c;
         result[i + 1] = (uint32_t)sum;
@@ -376,7 +376,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     result[1] = (uint32_t)sum1;
     uint64_t carry = sum1 >> 32;
     
-    #pragma unroll
+    
     for (int i = 2; i < BIGINT_WORDS; i++) {
         uint64_t sum = (uint64_t)result[i] + carry;
         result[i] = (uint32_t)sum;
@@ -384,7 +384,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     }
     
     
-    #pragma unroll
+    
     for (int i = 0; i < BIGINT_WORDS; i++) {
         res->data[i] = result[i];
     }
@@ -412,7 +412,6 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     asm volatile("subc.u32 %0, 0, 0;" : "=r"(borrow));
     uint32_t mask = ~borrow;
     
-    #pragma unroll
     for (int i = 0; i < 8; i++) {
         res->data[i] = (tmp[i] & mask) | (res->data[i] & ~mask);
     }
@@ -957,7 +956,6 @@ __device__ void ripemd160(const uint8_t* __restrict__ msg,
     const uint32_t* msg32 = reinterpret_cast<const uint32_t*>(msg);
     uint32_t X[16];
     
-    #pragma unroll
     for (int i = 0; i < 8; i++) {
         X[i] = msg32[i];
     }
@@ -1113,7 +1111,6 @@ __device__ __forceinline__ void scalar_multiply_multi_base_jac(ECPointJac *resul
     
     int first_window = -1;
     
-    #pragma unroll
     for (int window = NUM_BASE_POINTS - 1; window >= 0; window--) {
         int bit_index = window * WINDOW_SIZE;
         uint32_t word_idx = bit_index >> 5;  
@@ -1141,7 +1138,6 @@ __device__ __forceinline__ void scalar_multiply_multi_base_jac(ECPointJac *resul
     }
     
     
-    #pragma unroll
     for (int window = first_window - 1; window >= 0; window--) {
         int bit_index = window * WINDOW_SIZE;
         uint32_t word_idx = bit_index >> 5;
@@ -1166,7 +1162,6 @@ __device__ void jacobian_batch_to_hash160(const ECPointJac points[BATCH_SIZE], u
     uint8_t valid_count = 0;
     
     
-    #pragma unroll
     for (int i = 0; i < BATCH_SIZE; i++) {
         uint32_t z_check = points[i].Z.data[0] | points[i].Z.data[1] | 
                           points[i].Z.data[2] | points[i].Z.data[3] |
@@ -1221,7 +1216,7 @@ __device__ void jacobian_batch_to_hash160(const ECPointJac points[BATCH_SIZE], u
         uint8_t pubkey[33];
         pubkey[0] = 0x02 | (y_affine.data[0] & 1);
         
-        #pragma unroll
+
         for (int j = 0; j < 8; j++) {
             uint32_t word = x_affine.data[7 - j];
             int base = 1 + (j << 2);
