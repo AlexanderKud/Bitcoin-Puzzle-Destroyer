@@ -1,6 +1,6 @@
-This is my own Hand-Made project
+This is a Hand-Made project
 
-This program searches for Bitcoin Puzzles on any range
+This program searches for Bitcoin Puzzles (or any other BTC address) on any range
 
 THIS IS PURE TRUE UNBIASED RANDOM, with real speed, not fake
 
@@ -26,18 +26,18 @@ just in case if you will edit this code further, you can compile it with the com
 
 `nvcc -o main main.cu`
 
-also in secp256k1.cuh there are few parameters at top of the file:
+also in secp256k1.cuh there are few parameters at top of the file that you can change for your preference:
 
-`#define BIGINT_WORDS 8` - this one should stay as it is, cause 8 is required for 64 hex\
-`#define WINDOW_SIZE 14` - this higher it is the more memory is required and the more loading time it will be before the start\
-`#define NUM_BASE_POINTS 64` - its better not to change this, tough the less it is the less bits it can process for the correct hash160\
-`#define BATCH_SIZE 64` - this one defined how deep the algorithm will search, if random defines X and Y coordinates, then this defines how deep it will go through Z coordinate\
-`#define MOD_EXP 5` - this one affects the most heavy function, that is exponential calculation, the higher the faster it should be, but requires more memory, usually its 4,5,6
+`#define BIGINT_WORDS 8`
+`#define WINDOW_SIZE 16`
+`#define NUM_BASE_POINTS 16`
+`#define BATCH_SIZE 128`
+`#define MOD_EXP 4`
 
-in case if this was useful to you, can you please donate BTC:
+BTC for donations:
 
 `bc1q8n38pk3urztlt4vceq0h089l9jdcw58l2c0e80`
 
-so i will be more motivated to develop further this project
+contacts:
 
-author: https://t.me/biernus
+https://t.me/biernus
