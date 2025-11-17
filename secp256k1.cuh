@@ -779,11 +779,9 @@ __constant__ uint32_t c_K[64] = {
     0x90befffaul,0xa4506cebul,0xbef9a3f7ul,0xc67178f2ul
 };
 
-
 __device__ __forceinline__ uint32_t rotr(uint32_t x, int n) {
-    return (x >> n) | (x << (32 - n));
+    return __funnelshift_rc(x, x, n);
 }
-
 
 __device__ __forceinline__ uint32_t Ch(uint32_t x, uint32_t y, uint32_t z) {
     return (x & y) ^ (~x & z);
@@ -817,7 +815,6 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
     const uint32_t* data32 = (const uint32_t*)data;
     int len_aligned = len & ~3;
     
-    
     for (int i = 0; i < 16; ++i) {
         int offset = i * 4;
         if (offset < len_aligned) {
@@ -836,16 +833,12 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
         }
     }
     
-    
     for (int i = 16; i < 64; ++i) {
-        uint32_t s0 = sigma0(w[i - 15]);
-        uint32_t s1 = sigma1(w[i - 2]);
-        w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+        w[i] = w[i - 16] + sigma0(w[i - 15]) + w[i - 7] + sigma1(w[i - 2]);
     }
     
     uint32_t a = h0, b = h1, c = h2, d = h3;
     uint32_t e = h4, f = h5, g = h6, h = h7;
-    
     
     for (int i = 0; i < 64; ++i) {
         uint32_t s1 = Sigma1(e);
@@ -855,16 +848,19 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
         uint32_t maj = Maj(a, b, c);
         uint32_t temp2 = s0 + maj;
         
-        h = g; g = f; f = e;
+        h = g; 
+        g = f; 
+        f = e;
         e = d + temp1;
-        d = c; c = b; b = a;
+        d = c; 
+        c = b; 
+        b = a;
         a = temp1 + temp2;
     }
     
     h0 += a; h1 += b; h2 += c; h3 += d;
     h4 += e; h5 += f; h6 += g; h7 += h;
-    
-    
+
     uint32_t* out = (uint32_t*)hash;
     out[0] = __byte_perm(h0, 0, 0x0123);
     out[1] = __byte_perm(h1, 0, 0x0123);
@@ -875,7 +871,6 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
     out[6] = __byte_perm(h6, 0, 0x0123);
     out[7] = __byte_perm(h7, 0, 0x0123);
 }
-
 #define R2(aL,bL,cL,dL,eL,fL,xL,sL,kL, aR,bR,cR,dR,eR,fR,xR,sR,kR) \
 	{ \
 		uint32_t tL = aL + fL(bL,cL,dL) + xL + kL; \
