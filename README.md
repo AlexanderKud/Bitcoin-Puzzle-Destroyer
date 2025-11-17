@@ -26,6 +26,8 @@ just in case if you will edit this code further, you can compile it with the com
 
 `nvcc -o main main.cu`
 
+you can set the DEVICE ID as the last parameter as 0, 1, 2, 3 etc...when you run the program it will display available gpus and their IDS
+
 also in secp256k1.cuh there are few parameters at top of the file that you can change for your preference:
 
 `#define BIGINT_WORDS 8`
