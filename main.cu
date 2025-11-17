@@ -378,7 +378,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
                 double total_time = std::chrono::duration<double>(current_time - start_time).count();
                 double current_kps = total_keys_checked / total_time;
                 
-                printf("\rSpeed: %.2f MK/s | Total: %.2f B keys\n",
+                printf("\rSpeed: %.2f MK/s | Total: %.2f B keys",
                        current_kps / 1000000.0,
                        total_keys_checked / 1000000000.0);
                 fflush(stdout);
