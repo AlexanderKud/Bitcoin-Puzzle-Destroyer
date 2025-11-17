@@ -876,7 +876,19 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
     out[7] = __byte_perm(h7, 0, 0x0123);
 }
 
-
+#define R2(aL,bL,cL,dL,eL,fL,xL,sL,kL, aR,bR,cR,dR,eR,fR,xR,sR,kR) \
+	{ \
+		uint32_t tL = aL + fL(bL,cL,dL) + xL + kL; \
+		uint32_t tR = aR + fR(bR,cR,dR) + xR + kR; \
+		uint32_t cL10 = __funnelshift_lc(cL,cL,10); \
+		uint32_t cR10 = __funnelshift_lc(cR,cR,10); \
+		aL = eL; aR = eR; \
+		eL = dL; eR = dR; \
+		dL = cL10; dR = cR10; \
+		cL = bL; cR = bR; \
+		bL = __funnelshift_lc(tL,tL,sL) + aL; \
+		bR = __funnelshift_lc(tR,tR,sR) + aR; \
+	}
 
 
 __device__ __forceinline__ uint32_t F(uint32_t x, uint32_t y, uint32_t z) {
@@ -899,10 +911,6 @@ __device__ __forceinline__ uint32_t J(uint32_t x, uint32_t y, uint32_t z) {
     return x ^ (y | ~z);
 }
 
-__device__ __forceinline__ uint32_t ROL(uint32_t x, int n) {
-    return __funnelshift_lc(x, x, n);
-}
-
 __device__ void ripemd160(const uint8_t* __restrict__ msg, 
                           uint8_t* __restrict__ out) {
     
@@ -918,79 +926,90 @@ __device__ void ripemd160(const uint8_t* __restrict__ msg,
     uint32_t AR = 0x67452301, BR = 0xEFCDAB89, CR = 0x98BADCFE;
     uint32_t DR = 0x10325476, ER = 0xC3D2E1F0;
     
-    uint32_t tl, tr;
+    R2(AL,BL,CL,DL,EL,F,X0,11,0, AR,BR,CR,DR,ER,J,X5,8,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X1,14,0, AR,BR,CR,DR,ER,J,X14,9,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X2,15,0, AR,BR,CR,DR,ER,J,X7,9,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X3,12,0, AR,BR,CR,DR,ER,J,X0,11,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X4,5,0, AR,BR,CR,DR,ER,J,X9,13,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X5,8,0, AR,BR,CR,DR,ER,J,X2,15,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X6,7,0, AR,BR,CR,DR,ER,J,X11,15,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X7,9,0, AR,BR,CR,DR,ER,J,X4,5,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X8,11,0, AR,BR,CR,DR,ER,J,X13,7,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X9,13,0, AR,BR,CR,DR,ER,J,X6,7,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X10,14,0, AR,BR,CR,DR,ER,J,X15,8,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X11,15,0, AR,BR,CR,DR,ER,J,X8,11,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X12,6,0, AR,BR,CR,DR,ER,J,X1,14,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X13,7,0, AR,BR,CR,DR,ER,J,X10,14,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X14,9,0, AR,BR,CR,DR,ER,J,X3,12,0x50A28BE6);
+    R2(AL,BL,CL,DL,EL,F,X15,8,0, AR,BR,CR,DR,ER,J,X12,6,0x50A28BE6);
     
+    R2(AL,BL,CL,DL,EL,G,X7,7,0x5A827999, AR,BR,CR,DR,ER,I,X6,9,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X4,6,0x5A827999, AR,BR,CR,DR,ER,I,X11,13,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X13,8,0x5A827999, AR,BR,CR,DR,ER,I,X3,15,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X1,13,0x5A827999, AR,BR,CR,DR,ER,I,X7,7,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X10,11,0x5A827999, AR,BR,CR,DR,ER,I,X0,12,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X6,9,0x5A827999, AR,BR,CR,DR,ER,I,X13,8,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X15,7,0x5A827999, AR,BR,CR,DR,ER,I,X5,9,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X3,15,0x5A827999, AR,BR,CR,DR,ER,I,X10,11,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X12,7,0x5A827999, AR,BR,CR,DR,ER,I,X14,7,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X0,12,0x5A827999, AR,BR,CR,DR,ER,I,X15,7,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X9,15,0x5A827999, AR,BR,CR,DR,ER,I,X8,12,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X5,9,0x5A827999, AR,BR,CR,DR,ER,I,X12,7,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X2,11,0x5A827999, AR,BR,CR,DR,ER,I,X4,6,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X14,7,0x5A827999, AR,BR,CR,DR,ER,I,X9,15,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X11,13,0x5A827999, AR,BR,CR,DR,ER,I,X1,13,0x5C4DD124);
+    R2(AL,BL,CL,DL,EL,G,X8,12,0x5A827999, AR,BR,CR,DR,ER,I,X2,11,0x5C4DD124);
     
+    R2(AL,BL,CL,DL,EL,H,X3,11,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X15,9,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X10,13,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X5,7,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X14,6,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X1,15,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X4,7,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X3,11,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X9,14,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X7,8,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X15,9,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X14,6,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X8,13,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X6,6,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X1,15,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X9,14,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X2,14,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X11,12,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X7,8,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X8,13,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X0,13,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X12,5,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X6,6,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X2,14,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X13,5,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X10,13,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X11,12,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X0,13,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X5,7,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X4,7,0x6D703EF3);
+    R2(AL,BL,CL,DL,EL,H,X12,5,0x6ED9EBA1, AR,BR,CR,DR,ER,H,X13,5,0x6D703EF3);
     
+    R2(AL,BL,CL,DL,EL,I,X1,11,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X8,15,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X9,12,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X6,5,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X11,14,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X4,8,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X10,15,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X1,11,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X0,14,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X3,14,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X8,15,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X11,14,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X12,9,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X15,6,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X4,8,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X0,14,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X13,9,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X5,6,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X3,14,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X12,9,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X7,5,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X2,12,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X15,6,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X13,9,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X14,8,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X9,12,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X5,6,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X7,5,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X6,5,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X10,15,0x7A6D76E9);
+    R2(AL,BL,CL,DL,EL,I,X2,12,0x8F1BBCDC, AR,BR,CR,DR,ER,G,X14,8,0x7A6D76E9);
     
-    #define R0_15(i, xl, sl, xr, sr) \
-        tl = AL + F(BL,CL,DL) + xl; tl = ROL(tl,sl) + EL; AL = EL; EL = DL; DL = ROL(CL,10); CL = BL; BL = tl; \
-        tr = AR + J(BR,CR,DR) + xr + 0x50A28BE6; tr = ROL(tr,sr) + ER; AR = ER; ER = DR; DR = ROL(CR,10); CR = BR; BR = tr;
-    
-    R0_15(0, X0, 11, X5, 8);   R0_15(1, X1, 14, X14, 9);
-    R0_15(2, X2, 15, X7, 9);   R0_15(3, X3, 12, X0, 11);
-    R0_15(4, X4, 5, X9, 13);   R0_15(5, X5, 8, X2, 15);
-    R0_15(6, X6, 7, X11, 15);  R0_15(7, X7, 9, X4, 5);
-    R0_15(8, X8, 11, X13, 7);  R0_15(9, X9, 13, X6, 7);
-    R0_15(10, X10, 14, X15, 8); R0_15(11, X11, 15, X8, 11);
-    R0_15(12, X12, 6, X1, 14); R0_15(13, X13, 7, X10, 14);
-    R0_15(14, X14, 9, X3, 12); R0_15(15, X15, 8, X12, 6);
-    
-    
-    #define R16_31(i, xl, sl, xr, sr) \
-        tl = AL + G(BL,CL,DL) + xl + 0x5A827999; tl = ROL(tl,sl) + EL; AL = EL; EL = DL; DL = ROL(CL,10); CL = BL; BL = tl; \
-        tr = AR + I(BR,CR,DR) + xr + 0x5C4DD124; tr = ROL(tr,sr) + ER; AR = ER; ER = DR; DR = ROL(CR,10); CR = BR; BR = tr;
-    
-    R16_31(16, X7, 7, X6, 9);   R16_31(17, X4, 6, X11, 13);
-    R16_31(18, X13, 8, X3, 15); R16_31(19, X1, 13, X7, 7);
-    R16_31(20, X10, 11, X0, 12); R16_31(21, X6, 9, X13, 8);
-    R16_31(22, X15, 7, X5, 9);  R16_31(23, X3, 15, X10, 11);
-    R16_31(24, X12, 7, X14, 7); R16_31(25, X0, 12, X15, 7);
-    R16_31(26, X9, 15, X8, 12); R16_31(27, X5, 9, X12, 7);
-    R16_31(28, X2, 11, X4, 6);  R16_31(29, X14, 7, X9, 15);
-    R16_31(30, X11, 13, X1, 13); R16_31(31, X8, 12, X2, 11);
-    
-    
-    #define R32_47(i, xl, sl, xr, sr) \
-        tl = AL + H(BL,CL,DL) + xl + 0x6ED9EBA1; tl = ROL(tl,sl) + EL; AL = EL; EL = DL; DL = ROL(CL,10); CL = BL; BL = tl; \
-        tr = AR + H(BR,CR,DR) + xr + 0x6D703EF3; tr = ROL(tr,sr) + ER; AR = ER; ER = DR; DR = ROL(CR,10); CR = BR; BR = tr;
-    
-    R32_47(32, X3, 11, X15, 9);  R32_47(33, X10, 13, X5, 7);
-    R32_47(34, X14, 6, X1, 15);  R32_47(35, X4, 7, X3, 11);
-    R32_47(36, X9, 14, X7, 8);   R32_47(37, X15, 9, X14, 6);
-    R32_47(38, X8, 13, X6, 6);   R32_47(39, X1, 15, X9, 14);
-    R32_47(40, X2, 14, X11, 12); R32_47(41, X7, 8, X8, 13);
-    R32_47(42, X0, 13, X12, 5);  R32_47(43, X6, 6, X2, 14);
-    R32_47(44, X13, 5, X10, 13); R32_47(45, X11, 12, X0, 13);
-    R32_47(46, X5, 7, X4, 7);    R32_47(47, X12, 5, X13, 5);
-    
-    
-    #define R48_63(i, xl, sl, xr, sr) \
-        tl = AL + I(BL,CL,DL) + xl + 0x8F1BBCDC; tl = ROL(tl,sl) + EL; AL = EL; EL = DL; DL = ROL(CL,10); CL = BL; BL = tl; \
-        tr = AR + G(BR,CR,DR) + xr + 0x7A6D76E9; tr = ROL(tr,sr) + ER; AR = ER; ER = DR; DR = ROL(CR,10); CR = BR; BR = tr;
-    
-    R48_63(48, X1, 11, X8, 15);  R48_63(49, X9, 12, X6, 5);
-    R48_63(50, X11, 14, X4, 8);  R48_63(51, X10, 15, X1, 11);
-    R48_63(52, X0, 14, X3, 14);  R48_63(53, X8, 15, X11, 14);
-    R48_63(54, X12, 9, X15, 6);  R48_63(55, X4, 8, X0, 14);
-    R48_63(56, X13, 9, X5, 6);   R48_63(57, X3, 14, X12, 9);
-    R48_63(58, X7, 5, X2, 12);   R48_63(59, X15, 6, X13, 9);
-    R48_63(60, X14, 8, X9, 12);  R48_63(61, X5, 6, X7, 5);
-    R48_63(62, X6, 5, X10, 15);  R48_63(63, X2, 12, X14, 8);
-    
-    
-    #define R64_79(i, xl, sl, xr, sr) \
-        tl = AL + J(BL,CL,DL) + xl + 0xA953FD4E; tl = ROL(tl,sl) + EL; AL = EL; EL = DL; DL = ROL(CL,10); CL = BL; BL = tl; \
-        tr = AR + F(BR,CR,DR) + xr; tr = ROL(tr,sr) + ER; AR = ER; ER = DR; DR = ROL(CR,10); CR = BR; BR = tr;
-    
-    R64_79(64, X4, 9, X12, 8);   R64_79(65, X0, 15, X15, 5);
-    R64_79(66, X5, 5, X10, 12);  R64_79(67, X9, 11, X4, 9);
-    R64_79(68, X7, 6, X1, 12);   R64_79(69, X12, 8, X5, 5);
-    R64_79(70, X2, 13, X8, 14);  R64_79(71, X10, 12, X7, 6);
-    R64_79(72, X14, 5, X6, 8);   R64_79(73, X1, 12, X2, 13);
-    R64_79(74, X3, 13, X13, 6);  R64_79(75, X8, 14, X14, 5);
-    R64_79(76, X11, 11, X0, 15); R64_79(77, X6, 8, X3, 13);
-    R64_79(78, X15, 5, X9, 11);  R64_79(79, X13, 6, X11, 11);
+    R2(AL,BL,CL,DL,EL,J,X4,9,0xA953FD4E, AR,BR,CR,DR,ER,F,X12,8,0);
+    R2(AL,BL,CL,DL,EL,J,X0,15,0xA953FD4E, AR,BR,CR,DR,ER,F,X15,5,0);
+    R2(AL,BL,CL,DL,EL,J,X5,5,0xA953FD4E, AR,BR,CR,DR,ER,F,X10,12,0);
+    R2(AL,BL,CL,DL,EL,J,X9,11,0xA953FD4E, AR,BR,CR,DR,ER,F,X4,9,0);
+    R2(AL,BL,CL,DL,EL,J,X7,6,0xA953FD4E, AR,BR,CR,DR,ER,F,X1,12,0);
+    R2(AL,BL,CL,DL,EL,J,X12,8,0xA953FD4E, AR,BR,CR,DR,ER,F,X5,5,0);
+    R2(AL,BL,CL,DL,EL,J,X2,13,0xA953FD4E, AR,BR,CR,DR,ER,F,X8,14,0);
+    R2(AL,BL,CL,DL,EL,J,X10,12,0xA953FD4E, AR,BR,CR,DR,ER,F,X7,6,0);
+    R2(AL,BL,CL,DL,EL,J,X14,5,0xA953FD4E, AR,BR,CR,DR,ER,F,X6,8,0);
+    R2(AL,BL,CL,DL,EL,J,X1,12,0xA953FD4E, AR,BR,CR,DR,ER,F,X2,13,0);
+    R2(AL,BL,CL,DL,EL,J,X3,13,0xA953FD4E, AR,BR,CR,DR,ER,F,X13,6,0);
+    R2(AL,BL,CL,DL,EL,J,X8,14,0xA953FD4E, AR,BR,CR,DR,ER,F,X14,5,0);
+    R2(AL,BL,CL,DL,EL,J,X11,11,0xA953FD4E, AR,BR,CR,DR,ER,F,X0,15,0);
+    R2(AL,BL,CL,DL,EL,J,X6,8,0xA953FD4E, AR,BR,CR,DR,ER,F,X3,13,0);
+    R2(AL,BL,CL,DL,EL,J,X15,5,0xA953FD4E, AR,BR,CR,DR,ER,F,X9,11,0);
+    R2(AL,BL,CL,DL,EL,J,X13,6,0xA953FD4E, AR,BR,CR,DR,ER,F,X11,11,0);
     
     uint32_t T = 0xEFCDAB89 + CL + DR;
     
