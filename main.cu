@@ -301,7 +301,7 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
 	BCryptGenRandom(NULL, (PUCHAR)&seed, sizeof(seed), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     
     
-    int check_interval = 100;
+    int check_interval = 10;
     int iteration = 0;
     
     while(true) {
