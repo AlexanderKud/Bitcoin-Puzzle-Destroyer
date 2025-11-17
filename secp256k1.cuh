@@ -1155,27 +1155,31 @@ __device__ __forceinline__ void scalar_multiply_multi_base_jac(ECPointJac *resul
 		}
     }
 }
-
 __device__ void jacobian_batch_to_hash160(const ECPointJac points[BATCH_SIZE], uint8_t hash160_out[BATCH_SIZE][20]) {
     
-    uint8_t valid_map[BATCH_SIZE];
+    
+    bool is_valid[BATCH_SIZE];
+    uint8_t valid_indices[BATCH_SIZE];
     uint8_t valid_count = 0;
     
-    
     for (int i = 0; i < BATCH_SIZE; i++) {
-        uint32_t z_check = points[i].Z.data[0] | points[i].Z.data[1] | 
-                          points[i].Z.data[2] | points[i].Z.data[3] |
-                          points[i].Z.data[4] | points[i].Z.data[5] | 
-                          points[i].Z.data[6] | points[i].Z.data[7];
         
-        bool is_valid = (!points[i].infinity) & (z_check != 0);
+        uint32_t z_check = points[i].Z.data[0];
+        #pragma unroll
+        for (int j = 1; j < 8; j++) {
+            z_check |= points[i].Z.data[j];
+        }
         
-        if (is_valid) {
-            valid_map[valid_count++] = i;
-        } else {
-            *((uint64_t*)hash160_out[i]) = 0;
-            *((uint64_t*)(hash160_out[i] + 8)) = 0;
+        is_valid[i] = (!points[i].infinity) && (z_check != 0);
+        
+        if (!is_valid[i]) {
+            
+            uint4* zero_ptr = (uint4*)hash160_out[i];
+            zero_ptr[0] = make_uint4(0, 0, 0, 0);
+            zero_ptr[1] = make_uint4(0, 0, 0, 0);
             *((uint32_t*)(hash160_out[i] + 16)) = 0;
+        } else {
+            valid_indices[valid_count++] = i;
         }
     }
     
@@ -1185,28 +1189,31 @@ __device__ void jacobian_batch_to_hash160(const ECPointJac points[BATCH_SIZE], u
     BigInt products[BATCH_SIZE];
     BigInt inverses[BATCH_SIZE];
     
-    copy_bigint(&products[0], &points[valid_map[0]].Z);
+    copy_bigint(&products[0], &points[valid_indices[0]].Z);
+    
     
     for (int i = 1; i < valid_count; i++) {
-        mul_mod_device(&products[i], &products[i-1], &points[valid_map[i]].Z);
+        mul_mod_device(&products[i], &products[i-1], &points[valid_indices[i]].Z);
     }
     
     BigInt current_inv;
     mod_inverse(&current_inv, &products[valid_count - 1]);
     
+    
     for (int i = valid_count - 1; i > 0; i--) {
         mul_mod_device(&inverses[i], &current_inv, &products[i-1]);
-        mul_mod_device(&current_inv, &current_inv, &points[valid_map[i]].Z);
+        mul_mod_device(&current_inv, &current_inv, &points[valid_indices[i]].Z);
     }
     copy_bigint(&inverses[0], &current_inv);
     
     
-    for (int i = 0; i < valid_count; i++) {
-        uint8_t idx = valid_map[i];
+    for (int v = 0; v < valid_count; v++) {
+        uint8_t idx = valid_indices[v];
         
         BigInt Zinv2, Zinv3;
-        mul_mod_device(&Zinv2, &inverses[i], &inverses[i]);
-        mul_mod_device(&Zinv3, &Zinv2, &inverses[i]);
+        
+        mul_mod_device(&Zinv2, &inverses[v], &inverses[v]);
+        mul_mod_device(&Zinv3, &Zinv2, &inverses[v]);
         
         BigInt x_affine, y_affine;
         mul_mod_device(&x_affine, &points[idx].X, &Zinv2);
@@ -1216,15 +1223,17 @@ __device__ void jacobian_batch_to_hash160(const ECPointJac points[BATCH_SIZE], u
         uint8_t pubkey[33];
         pubkey[0] = 0x02 | (y_affine.data[0] & 1);
         
-
+        
+        uint32_t* x_data = x_affine.data;
         for (int j = 0; j < 8; j++) {
-            uint32_t word = x_affine.data[7 - j];
-            int base = 1 + (j << 2);
-            pubkey[base]     = word >> 24;
-            pubkey[base + 1] = word >> 16;
-            pubkey[base + 2] = word >> 8;
-            pubkey[base + 3] = word;
+            uint32_t word = x_data[7 - j];
+            uint8_t* target = &pubkey[1 + (j << 2)];
+            target[0] = word >> 24;
+            target[1] = word >> 16;
+            target[2] = word >> 8;
+            target[3] = word;
         }
+        
         
         hash160(pubkey, 33, hash160_out[idx]);
     }

@@ -241,18 +241,13 @@ __global__ void start(uint64_t seed)
     
     scalar_multiply_multi_base_jac(&result_jac_batch[0], &priv_base);
     
-    
-    
     for (int i = 1; i < BATCH_SIZE; ++i) {
         
         add_G_to_point_jac(&result_jac_batch[i], &result_jac_batch[i-1]);
     }
     
-    
     jacobian_batch_to_hash160(result_jac_batch, hash160_batch);
-    
 
-    
     for (int i = 0; i < BATCH_SIZE; ++i) {
         if (compare_hash160_fast(hash160_batch[i], d_target) && atomicCAS((int*)&g_found, 0, 1) == 0) {
             
