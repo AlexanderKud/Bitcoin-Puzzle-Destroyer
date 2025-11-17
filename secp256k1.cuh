@@ -1419,3 +1419,83 @@ void init_gpu_constants() {
     
     printf("Precomputation complete and verified.\n");
 }
+
+
+__device__ __forceinline__ void add_G_to_point_jac(ECPointJac *R, const ECPointJac *P) {
+    // Since G.Z = 1, many operations simplify:
+    // Z2Z2 = 1, Z2^3 = 1
+    // U2 = G.X * Z1^2
+    // S2 = G.Y * Z1^3
+    
+    if (__builtin_expect(P->infinity, 0)) { 
+        point_copy_jac(R, &const_G_jacobian); 
+        return; 
+    }
+    
+    BigInt Z1Z1, Z1Z1Z1, U1, U2, H, S1, S2, R_big;
+    BigInt H2, H3, U1H2, R2, temp;
+    
+    // Step 1: Z1^2 (only need to compute P's Z squared)
+    mul_mod_device(&Z1Z1, &P->Z, &P->Z);
+    
+    // Step 2: U1 = P.X, U2 = G.X * Z1^2
+    copy_bigint(&U1, &P->X);
+    mul_mod_device(&U2, &const_G_jacobian.X, &Z1Z1);
+    
+    // Step 3: H = U2 - U1
+    sub_mod_device_fast(&H, &U2, &U1);
+    
+    // Fast check for point doubling (extremely rare with random points)
+    if (__builtin_expect(is_zero(&H), 0)) {
+        // Z1^3 for S comparison
+        mul_mod_device(&Z1Z1Z1, &Z1Z1, &P->Z);
+        
+        // S1 = P.Y, S2 = G.Y * Z1^3
+        copy_bigint(&S1, &P->Y);
+        mul_mod_device(&S2, &const_G_jacobian.Y, &Z1Z1Z1);
+        
+        if (compare_bigint(&S1, &S2) != 0) {
+            point_set_infinity_jac(R);
+        } else {
+            double_point_jac(R, P);
+        }
+        return;
+    }
+    
+    // Main addition case
+    // Z1^3 = Z1^2 * Z1
+    mul_mod_device(&Z1Z1Z1, &Z1Z1, &P->Z);
+    
+    // S1 = P.Y, S2 = G.Y * Z1^3
+    copy_bigint(&S1, &P->Y);
+    mul_mod_device(&S2, &const_G_jacobian.Y, &Z1Z1Z1);
+    
+    // R = S2 - S1
+    sub_mod_device_fast(&R_big, &S2, &S1);
+    
+    // H^2 and H^3
+    mul_mod_device(&H2, &H, &H);
+    mul_mod_device(&H3, &H2, &H);
+    
+    // U1*H^2
+    mul_mod_device(&U1H2, &U1, &H2);
+    
+    // R^2
+    mul_mod_device(&R2, &R_big, &R_big);
+    
+    // X3 = R^2 - H^3 - 2*U1*H^2
+    sub_mod_device_fast(&R->X, &R2, &H3);
+    sub_mod_device_fast(&R->X, &R->X, &U1H2);
+    sub_mod_device_fast(&R->X, &R->X, &U1H2);
+    
+    // Y3 = R*(U1*H^2 - X3) - S1*H^3
+    sub_mod_device_fast(&temp, &U1H2, &R->X);
+    mul_mod_device(&temp, &R_big, &temp);
+    mul_mod_device(&S1, &S1, &H3);
+    sub_mod_device_fast(&R->Y, &temp, &S1);
+    
+    // Z3 = Z1*H (since G.Z = 1)
+    mul_mod_device(&R->Z, &P->Z, &H);
+    
+    R->infinity = false;
+}

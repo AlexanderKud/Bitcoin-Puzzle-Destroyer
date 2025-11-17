@@ -129,6 +129,19 @@ __device__ void hash160_to_hex(const uint8_t *hash, char *out_hex) {
     out_hex[40] = '\0';
 }
 
+__device__ void bigint_increment(BigInt* a) {
+    // Add 1 to the BigInt
+    uint64_t carry = 1;
+    
+    #pragma unroll
+    for (int i = 0; i < 4; ++i) {
+        uint64_t sum = a->data[i] + carry;
+        carry = (sum < a->data[i]) ? 1 : 0;  // Check for overflow
+        a->data[i] = sum;
+        
+        if (carry == 0) break;  // No more carry, we're done
+    }
+}
 
 __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_10_t* state, 
                                          const BigInt* min_val, const BigInt* max_val) {
@@ -220,39 +233,47 @@ __global__ void start(uint64_t seed)
     curandStatePhilox4_32_10_t state;
     curand_init(seed, tid, clock64(), &state);
     
-    
+    BigInt priv_base;
+	BigInt priv_current;
     ECPointJac result_jac_batch[BATCH_SIZE];
-    BigInt priv_batch[BATCH_SIZE];
     uint8_t hash160_batch[BATCH_SIZE][20];
+    generate_random_in_range(&priv_base, &state, &d_min_bigint, &d_max_bigint);
+    // --- Compute base point: P = priv_base * G ---
+    scalar_multiply_multi_base_jac(&result_jac_batch[0], &priv_base);
     
-	
-	#pragma unroll
-	for (int i = 0; i < BATCH_SIZE; ++i) {
-		generate_random_in_range(&priv_batch[i], &state, &d_min_bigint, &d_max_bigint);
-		scalar_multiply_multi_base_jac(&result_jac_batch[i], &priv_batch[i]);
-	}
-	
-	
-	jacobian_batch_to_hash160(result_jac_batch, hash160_batch);
-	
-	if (tid == 0) {
-		char hash160_str[41];
-		char hex_key[65];
-		bigint_to_hex(&priv_batch[0], hex_key);
-		hash160_to_hex(hash160_batch[0], hash160_str);
-		printf("Thread %d %s -> %s\n", tid, hex_key, hash160_str);
-	}
-	
-	// Unrolled comparison loop with constant memory target
-	#pragma unroll
-	for (int i = 0; i < BATCH_SIZE; ++i) {
-		if (compare_hash160_fast(hash160_batch[i], d_target) && atomicCAS((int*)&g_found, 0, 1) == 0) {
-			bigint_to_hex(&priv_batch[i], g_found_hex);
-			hash160_to_hex(hash160_batch[i], g_found_hash160);
-		}
-	}
-	
-	
+    // --- Generate sequential points: P+G, P+2G, P+3G, ... P+(BATCH_SIZE-1)G ---
+    #pragma unroll
+    for (int i = 1; i < BATCH_SIZE; ++i) {
+        // result_jac_batch[i] = result_jac_batch[i-1] + G
+        add_G_to_point_jac(&result_jac_batch[i], &result_jac_batch[i-1]);
+    }
+    
+    // --- Convert the entire batch to hash160s with ONE inverse ---
+    jacobian_batch_to_hash160(result_jac_batch, hash160_batch);
+    
+	/*
+    // Debug output after conversion (for first thread)
+    if (tid == 0) {
+        char hex_key[65];
+        char hash160_str[41];
+        hash160_to_hex(hash160_batch[0], hash160_str);
+		bigint_to_hex(&priv_base, hex_key);
+        printf("%s -> %s\n", hex_key, hash160_str);
+    }
+    */
+    #pragma unroll
+    for (int i = 0; i < BATCH_SIZE; ++i) {
+        if (compare_hash160_fast(hash160_batch[i], d_target) && atomicCAS((int*)&g_found, 0, 1) == 0) {
+            // Calculate the actual private key for this position
+            priv_current = priv_base;
+            for (int j = 0; j < i; ++j) {
+                bigint_increment(&priv_current);
+            }
+            
+            bigint_to_hex(&priv_current, g_found_hex);
+            hash160_to_hex(hash160_batch[i], g_found_hash160);
+        }
+    }
 }
 
 bool run_with_quantum_data(const char* min, const char* max, const char* target, int blocks, int threads, int device_id) {
