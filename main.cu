@@ -130,16 +130,16 @@ __device__ void hash160_to_hex(const uint8_t *hash, char *out_hex) {
 }
 
 __device__ void bigint_increment(BigInt* a) {
-    // Add 1 to the BigInt
+    
     uint64_t carry = 1;
     
     #pragma unroll
     for (int i = 0; i < 4; ++i) {
         uint64_t sum = a->data[i] + carry;
-        carry = (sum < a->data[i]) ? 1 : 0;  // Check for overflow
+        carry = (sum < a->data[i]) ? 1 : 0;  
         a->data[i] = sum;
         
-        if (carry == 0) break;  // No more carry, we're done
+        if (carry == 0) break;  
     }
 }
 
@@ -231,40 +231,31 @@ __global__ void start(uint64_t seed)
     
     
     curandStatePhilox4_32_10_t state;
-    curand_init(seed, tid, clock64(), &state);
+    curand_init(seed, tid, 0, &state);
     
     BigInt priv_base;
 	BigInt priv_current;
     ECPointJac result_jac_batch[BATCH_SIZE];
     uint8_t hash160_batch[BATCH_SIZE][20];
     generate_random_in_range(&priv_base, &state, &d_min_bigint, &d_max_bigint);
-    // --- Compute base point: P = priv_base * G ---
+    
     scalar_multiply_multi_base_jac(&result_jac_batch[0], &priv_base);
     
-    // --- Generate sequential points: P+G, P+2G, P+3G, ... P+(BATCH_SIZE-1)G ---
+    
     #pragma unroll
     for (int i = 1; i < BATCH_SIZE; ++i) {
-        // result_jac_batch[i] = result_jac_batch[i-1] + G
+        
         add_G_to_point_jac(&result_jac_batch[i], &result_jac_batch[i-1]);
     }
     
-    // --- Convert the entire batch to hash160s with ONE inverse ---
+    
     jacobian_batch_to_hash160(result_jac_batch, hash160_batch);
     
-	/*
-    // Debug output after conversion (for first thread)
-    if (tid == 0) {
-        char hex_key[65];
-        char hash160_str[41];
-        hash160_to_hex(hash160_batch[0], hash160_str);
-		bigint_to_hex(&priv_base, hex_key);
-        printf("%s -> %s\n", hex_key, hash160_str);
-    }
-    */
+
     #pragma unroll
     for (int i = 0; i < BATCH_SIZE; ++i) {
         if (compare_hash160_fast(hash160_batch[i], d_target) && atomicCAS((int*)&g_found, 0, 1) == 0) {
-            // Calculate the actual private key for this position
+            
             priv_current = priv_base;
             for (int j = 0; j < i; ++j) {
                 bigint_increment(&priv_current);
@@ -309,83 +300,77 @@ bool run_with_quantum_data(const char* min, const char* max, const char* target,
     auto last_print_time = start_time;
 	BCryptGenRandom(NULL, (PUCHAR)&seed, sizeof(seed), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     
-    // Check found flag every N iterations to reduce overhead
-    int check_interval = 10;
-    int iteration = 0;
-    
+
     while(true) {
         
         
         start<<<blocks, threads>>>(seed);
         
-        iteration++;
         seed += 1;
         total_keys_checked += keys_per_kernel;
         
-        // Only sync and check every N iterations
-        if (iteration % check_interval == 0) {
-            cudaDeviceSynchronize();
-            
-            cudaError_t err = cudaGetLastError();
-            if (err != cudaSuccess) {
-                fprintf(stderr, "CUDA kernel launch error at %s:%d - %s\n", __FILE__, __LINE__, cudaGetErrorString(err));
-            }
-            
-            // Check if found
-            cudaMemcpyFromSymbol(&found_flag, g_found, sizeof(int));
-            if (found_flag) {
-                printf("\n\n");
-                
-                char found_hex[65], found_hash160[41];
-                cudaMemcpyFromSymbol(found_hex, g_found_hex, 65);
-                cudaMemcpyFromSymbol(found_hash160, g_found_hash160, 41);
-                
-                double total_time = std::chrono::duration<double>(
-                    std::chrono::high_resolution_clock::now() - start_time
-                ).count();
-                
-                printf("FOUND!\n");
-                printf("Private Key: %s\n", found_hex);
-                printf("Hash160: %s\n", found_hash160);
-                printf("Total time: %.2f seconds\n", total_time);
-                printf("Total keys checked: %llu (%.2f billion)\n", 
-                       (unsigned long long)total_keys_checked,
-                       total_keys_checked / 1000000000.0);
-                printf("Average speed: %.2f MK/s\n", total_keys_checked / total_time / 1000000.0);
-                
-                std::ofstream outfile("result.txt", std::ios::app);
-                if (outfile.is_open()) {
-                    std::time_t now = std::time(nullptr);
-                    char timestamp[100];
-                    std::strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
-                    outfile << "[" << timestamp << "] Found: " << found_hex << " -> " << found_hash160 << std::endl;
-                    outfile << "Total keys checked: " << total_keys_checked << std::endl;
-                    outfile << "Time taken: " << total_time << " seconds" << std::endl;
-                    outfile << "Average speed: " << (total_keys_checked / total_time / 1000000.0) << " MK/s" << std::endl;
-                    outfile << std::endl;
-                    outfile.close();
-                    std::cout << "Result appended to result.txt" << std::endl;
-                }
-                
-                return true;
-            }
-            
-            // Print speed every second
-            auto current_time = std::chrono::high_resolution_clock::now();
-            double elapsed_since_print = std::chrono::duration<double>(current_time - last_print_time).count();
-            
-            if (elapsed_since_print >= 1.0) {
-                double total_time = std::chrono::duration<double>(current_time - start_time).count();
-                double current_kps = total_keys_checked / total_time;
-                
-                printf("\rSpeed: %.2f MK/s | Total: %.2f B keys",
-                       current_kps / 1000000.0,
-                       total_keys_checked / 1000000000.0);
-                fflush(stdout);
-                
-                last_print_time = current_time;
-            }
-        }
+        
+		cudaDeviceSynchronize();
+		
+		cudaError_t err = cudaGetLastError();
+		if (err != cudaSuccess) {
+			fprintf(stderr, "CUDA kernel launch error at %s:%d - %s\n", __FILE__, __LINE__, cudaGetErrorString(err));
+		}
+		
+		
+		cudaMemcpyFromSymbol(&found_flag, g_found, sizeof(int));
+		if (found_flag) {
+			printf("\n\n");
+			
+			char found_hex[65], found_hash160[41];
+			cudaMemcpyFromSymbol(found_hex, g_found_hex, 65);
+			cudaMemcpyFromSymbol(found_hash160, g_found_hash160, 41);
+			
+			double total_time = std::chrono::duration<double>(
+				std::chrono::high_resolution_clock::now() - start_time
+			).count();
+			
+			printf("FOUND!\n");
+			printf("Private Key: %s\n", found_hex);
+			printf("Hash160: %s\n", found_hash160);
+			printf("Total time: %.2f seconds\n", total_time);
+			printf("Total keys checked: %llu (%.2f billion)\n", 
+				   (unsigned long long)total_keys_checked,
+				   total_keys_checked / 1000000000.0);
+			printf("Average speed: %.2f MK/s\n", total_keys_checked / total_time / 1000000.0);
+			
+			std::ofstream outfile("result.txt", std::ios::app);
+			if (outfile.is_open()) {
+				std::time_t now = std::time(nullptr);
+				char timestamp[100];
+				std::strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+				outfile << "[" << timestamp << "] Found: " << found_hex << " -> " << found_hash160 << std::endl;
+				outfile << "Total keys checked: " << total_keys_checked << std::endl;
+				outfile << "Time taken: " << total_time << " seconds" << std::endl;
+				outfile << "Average speed: " << (total_keys_checked / total_time / 1000000.0) << " MK/s" << std::endl;
+				outfile << std::endl;
+				outfile.close();
+				std::cout << "Result appended to result.txt" << std::endl;
+			}
+			
+			return true;
+		}
+		
+		
+		auto current_time = std::chrono::high_resolution_clock::now();
+		double elapsed_since_print = std::chrono::duration<double>(current_time - last_print_time).count();
+		
+		if (elapsed_since_print >= 1.0) {
+			double total_time = std::chrono::duration<double>(current_time - start_time).count();
+			double current_kps = total_keys_checked / total_time;
+			
+			printf("\rSpeed: %.2f MK/s | Total: %.2f B keys",
+				   current_kps / 1000000.0,
+				   total_keys_checked / 1000000000.0);
+			fflush(stdout);
+			
+			last_print_time = current_time;
+		}
     }
 }
 
@@ -398,7 +383,7 @@ int main(int argc, char* argv[]) {
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, 0);
     
-    int blocks = prop.multiProcessorCount * 16;  // More blocks for better GPU utilization
+    int blocks = 4096;  
     int threads = 256;
     int device_id = (argc > 4) ? std::stoi(argv[4]) : 0;
     

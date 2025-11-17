@@ -7,7 +7,7 @@
 #define WINDOW_SIZE 16
 #define NUM_BASE_POINTS 16
 #define BATCH_SIZE 200
-#define MOD_EXP 5
+#define MOD_EXP 4
 
 
 struct BigInt {
@@ -174,10 +174,10 @@ __device__ __forceinline__ void add_9word_with_carry(uint32_t r[9], const uint32
 
 __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, const BigInt *b) {
     
-    // Comba multiplication using 96-bit accumulator (3x32-bit words)
+    
     uint32_t product[16];
     
-    // We'll use inline PTX for mad.lo.cc.u32 and madc.hi.cc.u32 for efficient multiply-accumulate
+    
     #define MULADD(i, j) \
         asm volatile( \
             "mad.lo.cc.u32 %0, %3, %4, %0;\n\t" \
@@ -189,26 +189,26 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     
     uint32_t c0, c1, c2;
     
-    // Column 0
+    
     c0 = c1 = c2 = 0;
     asm("mul.lo.u32 %0, %1, %2;" : "=r"(c0) : "r"(a->data[0]), "r"(b->data[0]));
     asm("mul.hi.u32 %0, %1, %2;" : "=r"(c1) : "r"(a->data[0]), "r"(b->data[0]));
     product[0] = c0;
     
-    // Column 1
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(0, 1);
     MULADD(1, 0);
     product[1] = c0;
     
-    // Column 2
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(0, 2);
     MULADD(1, 1);
     MULADD(2, 0);
     product[2] = c0;
     
-    // Column 3
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(0, 3);
     MULADD(1, 2);
@@ -216,7 +216,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     MULADD(3, 0);
     product[3] = c0;
     
-    // Column 4
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(0, 4);
     MULADD(1, 3);
@@ -225,7 +225,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     MULADD(4, 0);
     product[4] = c0;
     
-    // Column 5
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(0, 5);
     MULADD(1, 4);
@@ -235,7 +235,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     MULADD(5, 0);
     product[5] = c0;
     
-    // Column 6
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(0, 6);
     MULADD(1, 5);
@@ -246,7 +246,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     MULADD(6, 0);
     product[6] = c0;
     
-    // Column 7
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(0, 7);
     MULADD(1, 6);
@@ -258,7 +258,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     MULADD(7, 0);
     product[7] = c0;
     
-    // Column 8
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(1, 7);
     MULADD(2, 6);
@@ -269,7 +269,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     MULADD(7, 1);
     product[8] = c0;
     
-    // Column 9
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(2, 7);
     MULADD(3, 6);
@@ -279,7 +279,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     MULADD(7, 2);
     product[9] = c0;
     
-    // Column 10
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(3, 7);
     MULADD(4, 6);
@@ -288,7 +288,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     MULADD(7, 3);
     product[10] = c0;
     
-    // Column 11
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(4, 7);
     MULADD(5, 6);
@@ -296,30 +296,30 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     MULADD(7, 4);
     product[11] = c0;
     
-    // Column 12
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(5, 7);
     MULADD(6, 6);
     MULADD(7, 5);
     product[12] = c0;
     
-    // Column 13
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(6, 7);
     MULADD(7, 6);
     product[13] = c0;
     
-    // Column 14
+    
     c0 = c1; c1 = c2; c2 = 0;
     MULADD(7, 7);
     product[14] = c0;
     
-    // Column 15
+    
     product[15] = c1;
     
     #undef MULADD
     
-    // Initialize result with lower 8 words
+    
     uint32_t result[9];
     #pragma unroll
     for (int i = 0; i < BIGINT_WORDS; i++) {
@@ -327,7 +327,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     }
     result[8] = 0;
     
-    // First reduction step: multiply upper words by 977 and add
+    
     uint64_t c = 0;
     
     #pragma unroll
@@ -347,7 +347,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
     
     result[8] = (uint32_t)c;
     
-    // Second reduction step: add upper words directly
+    
     c = 0;
     
     #pragma unroll
@@ -357,7 +357,7 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
         c = sum >> 32;
     }
     
-    // Handle final overflow
+    
     uint32_t overflow = result[8];
     uint32_t has_overflow = (uint32_t)(-(int32_t)(overflow != 0));
     uint32_t lo977, hi977;
@@ -383,13 +383,13 @@ __device__ __forceinline__ void mul_mod_device(BigInt *res, const BigInt *a, con
         carry = sum >> 32;
     }
     
-    // Copy result to output
+    
     #pragma unroll
     for (int i = 0; i < BIGINT_WORDS; i++) {
         res->data[i] = result[i];
     }
     
-    // Final conditional subtraction
+    
     uint32_t tmp[8];
     asm volatile(
         "sub.cc.u32 %0, %8, %16;\n\t"
@@ -700,25 +700,25 @@ __device__ __forceinline__ void add_point_jac(ECPointJac *R, const ECPointJac *P
         BigInt temp_array[9];
     } temp;
     
-    // Z1Z1 = Z1²
+    
     mul_mod_device(&temp.vars.Z1Z1, &P->Z, &P->Z);
-    // Z2Z2 = Z2²
+    
     mul_mod_device(&temp.vars.Z2Z2, &Q->Z, &Q->Z);
     
-    // U1 = X1·Z2²
+    
     mul_mod_device(&temp.vars.U1, &P->X, &temp.vars.Z2Z2);
-    // U2 = X2·Z1²
+    
     mul_mod_device(&temp.vars.U2, &Q->X, &temp.vars.Z1Z1);
     
-    // S1 = Y1·Z2³ = Y1·Z2²·Z2
+    
     mul_mod_device(&temp.vars.S1, &temp.vars.Z2Z2, &Q->Z);
     mul_mod_device(&temp.vars.S1, &P->Y, &temp.vars.S1);
     
-    // S2 = Y2·Z1³ = Y2·Z1²·Z1
+    
     mul_mod_device(&temp.vars.S2, &temp.vars.Z1Z1, &P->Z);
     mul_mod_device(&temp.vars.S2, &Q->Y, &temp.vars.S2);
     
-    // H = U2 - U1
+    
     sub_mod_device_fast(&temp.vars.H, &temp.vars.U2, &temp.vars.U1);
     
     if (__builtin_expect(is_zero(&temp.vars.H), 0)) {
@@ -730,30 +730,30 @@ __device__ __forceinline__ void add_point_jac(ECPointJac *R, const ECPointJac *P
         return;
     }
     
-    // r = S2 - S1
+    
     sub_mod_device_fast(&temp.vars.R_big, &temp.vars.S2, &temp.vars.S1);
     
-    // HH = H²
+    
     mul_mod_device(&temp.vars.HH, &temp.vars.H, &temp.vars.H);
-    // HHH = H³
+    
     mul_mod_device(&temp.vars.HHH, &temp.vars.HH, &temp.vars.H);
     
-    // V = U1·HH (reuse U2 for V)
+    
     mul_mod_device(&temp.vars.U2, &temp.vars.U1, &temp.vars.HH);
     
-    // X3 = r² - HHH - 2V
+    
     mul_mod_device(&R->X, &temp.vars.R_big, &temp.vars.R_big);
     sub_mod_device_fast(&R->X, &R->X, &temp.vars.HHH);
     sub_mod_device_fast(&R->X, &R->X, &temp.vars.U2);
     sub_mod_device_fast(&R->X, &R->X, &temp.vars.U2);
     
-    // Y3 = r·(V - X3) - S1·HHH
+    
     sub_mod_device_fast(&temp.vars.U1, &temp.vars.U2, &R->X);
     mul_mod_device(&temp.vars.U1, &temp.vars.R_big, &temp.vars.U1);
     mul_mod_device(&temp.vars.S1, &temp.vars.S1, &temp.vars.HHH);
     sub_mod_device_fast(&R->Y, &temp.vars.U1, &temp.vars.S1);
     
-    // Z3 = Z1·Z2·H
+    
     mul_mod_device(&R->Z, &P->Z, &Q->Z);
     mul_mod_device(&R->Z, &R->Z, &temp.vars.H);
     
@@ -818,7 +818,7 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
     const uint32_t* data32 = (const uint32_t*)data;
     int len_aligned = len & ~3;
     
-    // Load first 16 words using vectorized access
+    
     #pragma unroll
     for (int i = 0; i < 16; ++i) {
         int offset = i * 4;
@@ -839,7 +839,7 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
         }
     }
     
-    // Message schedule with reduced dependencies
+    
     #pragma unroll
     for (int i = 16; i < 64; ++i) {
         uint32_t s0 = sigma0(w[i - 15]);
@@ -850,7 +850,7 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
     uint32_t a = h0, b = h1, c = h2, d = h3;
     uint32_t e = h4, f = h5, g = h6, h = h7;
     
-    // Compression with partial unrolling for better register usage
+    
     #pragma unroll
     for (int i = 0; i < 64; ++i) {
         uint32_t s1 = Sigma1(e);
@@ -869,7 +869,7 @@ __device__ void sha256(const uint8_t* data, int len, uint8_t hash[32]) {
     h0 += a; h1 += b; h2 += c; h3 += d;
     h4 += e; h5 += f; h6 += g; h7 += h;
     
-    // Direct write output
+    
     uint32_t* out = (uint32_t*)hash;
     out[0] = __byte_perm(h0, 0, 0x0123);
     out[1] = __byte_perm(h1, 0, 0x0123);
@@ -957,7 +957,7 @@ __device__ __forceinline__ uint32_t ROL(uint32_t x, int n) {
     } while(0)
 __device__ void ripemd160(const uint8_t* __restrict__ msg, 
                           uint8_t* __restrict__ out) {
-    // Vector load input
+    
     const uint32_t* msg32 = reinterpret_cast<const uint32_t*>(msg);
     uint32_t X[16];
     
@@ -1032,10 +1032,10 @@ __device__ void ripemd160(const uint8_t* __restrict__ msg,
     }
     
     
-    // Combine results
+    
     uint32_t T = 0xEFCDAB89 + CL + DR;
     
-    // Vector store output
+    
     uint32_t* out32 = reinterpret_cast<uint32_t*>(out);
     out32[0] = T;
     out32[1] = 0x98BADCFE + DL + ER;
@@ -1114,16 +1114,16 @@ __device__ void jacobian_to_affine(ECPoint *R, const ECPointJac *P) {
 }
 
 __device__ __forceinline__ void scalar_multiply_multi_base_jac(ECPointJac *result, const BigInt *scalar) {
-    // Find first non-zero window to avoid infinity checks in main loop
+    
     int first_window = -1;
     
     #pragma unroll
     for (int window = NUM_BASE_POINTS - 1; window >= 0; window--) {
         int bit_index = window * WINDOW_SIZE;
-        uint32_t word_idx = bit_index >> 5;  // Divide by 32
-        uint32_t bit_offset = bit_index & 31; // Modulo 32
+        uint32_t word_idx = bit_index >> 5;  
+        uint32_t bit_offset = bit_index & 31; 
         
-        // Extract window value
+        
         uint32_t window_val = scalar->data[word_idx] >> bit_offset;
         if (bit_offset + WINDOW_SIZE > 32) {
             window_val |= scalar->data[word_idx + 1] << (32 - bit_offset);
@@ -1131,20 +1131,20 @@ __device__ __forceinline__ void scalar_multiply_multi_base_jac(ECPointJac *resul
         window_val &= (1U << WINDOW_SIZE) - 1;
         
         if (window_val != 0) {
-            // Initialize with first non-zero window
+            
             *result = G_base_precomp[window][window_val];
             first_window = window;
             break;
         }
     }
     
-    // Handle case where scalar is zero
+    
     if (first_window == -1) {
         point_set_infinity_jac(result);
         return;
     }
     
-    // Process remaining windows
+    
     #pragma unroll
     for (int window = first_window - 1; window >= 0; window--) {
         int bit_index = window * WINDOW_SIZE;
@@ -1169,7 +1169,7 @@ __device__ void jacobian_batch_to_hash160(const ECPointJac points[BATCH_SIZE], u
     uint8_t valid_map[BATCH_SIZE];
     uint8_t valid_count = 0;
     
-    // Clear invalid points and build valid map
+    
     #pragma unroll
     for (int i = 0; i < BATCH_SIZE; i++) {
         uint32_t z_check = points[i].Z.data[0] | points[i].Z.data[1] | 
@@ -1190,7 +1190,7 @@ __device__ void jacobian_batch_to_hash160(const ECPointJac points[BATCH_SIZE], u
     
     if (valid_count == 0) return;
     
-    // Montgomery batch inversion
+    
     BigInt products[BATCH_SIZE];
     BigInt inverses[BATCH_SIZE];
     
@@ -1209,7 +1209,7 @@ __device__ void jacobian_batch_to_hash160(const ECPointJac points[BATCH_SIZE], u
     }
     copy_bigint(&inverses[0], &current_inv);
     
-    // Convert to affine and compute hash160
+    
     for (int i = 0; i < valid_count; i++) {
         uint8_t idx = valid_map[i];
         
@@ -1221,7 +1221,7 @@ __device__ void jacobian_batch_to_hash160(const ECPointJac points[BATCH_SIZE], u
         mul_mod_device(&x_affine, &points[idx].X, &Zinv2);
         mul_mod_device(&y_affine, &points[idx].Y, &Zinv3);
         
-        // Build compressed pubkey directly
+        
         uint8_t pubkey[33];
         pubkey[0] = 0x02 | (y_affine.data[0] & 1);
         
@@ -1422,10 +1422,10 @@ void init_gpu_constants() {
 
 
 __device__ __forceinline__ void add_G_to_point_jac(ECPointJac *R, const ECPointJac *P) {
-    // Since G.Z = 1, many operations simplify:
-    // Z2Z2 = 1, Z2^3 = 1
-    // U2 = G.X * Z1^2
-    // S2 = G.Y * Z1^3
+    
+    
+    
+    
     
     if (__builtin_expect(P->infinity, 0)) { 
         point_copy_jac(R, &const_G_jacobian); 
@@ -1435,22 +1435,22 @@ __device__ __forceinline__ void add_G_to_point_jac(ECPointJac *R, const ECPointJ
     BigInt Z1Z1, Z1Z1Z1, U1, U2, H, S1, S2, R_big;
     BigInt H2, H3, U1H2, R2, temp;
     
-    // Step 1: Z1^2 (only need to compute P's Z squared)
+    
     mul_mod_device(&Z1Z1, &P->Z, &P->Z);
     
-    // Step 2: U1 = P.X, U2 = G.X * Z1^2
+    
     copy_bigint(&U1, &P->X);
     mul_mod_device(&U2, &const_G_jacobian.X, &Z1Z1);
     
-    // Step 3: H = U2 - U1
+    
     sub_mod_device_fast(&H, &U2, &U1);
     
-    // Fast check for point doubling (extremely rare with random points)
+    
     if (__builtin_expect(is_zero(&H), 0)) {
-        // Z1^3 for S comparison
+        
         mul_mod_device(&Z1Z1Z1, &Z1Z1, &P->Z);
         
-        // S1 = P.Y, S2 = G.Y * Z1^3
+        
         copy_bigint(&S1, &P->Y);
         mul_mod_device(&S2, &const_G_jacobian.Y, &Z1Z1Z1);
         
@@ -1462,39 +1462,39 @@ __device__ __forceinline__ void add_G_to_point_jac(ECPointJac *R, const ECPointJ
         return;
     }
     
-    // Main addition case
-    // Z1^3 = Z1^2 * Z1
+    
+    
     mul_mod_device(&Z1Z1Z1, &Z1Z1, &P->Z);
     
-    // S1 = P.Y, S2 = G.Y * Z1^3
+    
     copy_bigint(&S1, &P->Y);
     mul_mod_device(&S2, &const_G_jacobian.Y, &Z1Z1Z1);
     
-    // R = S2 - S1
+    
     sub_mod_device_fast(&R_big, &S2, &S1);
     
-    // H^2 and H^3
+    
     mul_mod_device(&H2, &H, &H);
     mul_mod_device(&H3, &H2, &H);
     
-    // U1*H^2
+    
     mul_mod_device(&U1H2, &U1, &H2);
     
-    // R^2
+    
     mul_mod_device(&R2, &R_big, &R_big);
     
-    // X3 = R^2 - H^3 - 2*U1*H^2
+    
     sub_mod_device_fast(&R->X, &R2, &H3);
     sub_mod_device_fast(&R->X, &R->X, &U1H2);
     sub_mod_device_fast(&R->X, &R->X, &U1H2);
     
-    // Y3 = R*(U1*H^2 - X3) - S1*H^3
+    
     sub_mod_device_fast(&temp, &U1H2, &R->X);
     mul_mod_device(&temp, &R_big, &temp);
     mul_mod_device(&S1, &S1, &H3);
     sub_mod_device_fast(&R->Y, &temp, &S1);
     
-    // Z3 = Z1*H (since G.Z = 1)
+    
     mul_mod_device(&R->Z, &P->Z, &H);
     
     R->infinity = false;
