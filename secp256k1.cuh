@@ -6,7 +6,7 @@
 #define BIGINT_WORDS 8
 #define WINDOW_SIZE 16
 #define NUM_BASE_POINTS 16
-#define BATCH_SIZE 200
+#define BATCH_SIZE 224
 #define MOD_EXP 4
 
 
@@ -43,11 +43,11 @@ __host__ __device__ __forceinline__ void init_bigint(BigInt *x, uint32_t val) {
 }
 
 __device__ __forceinline__ void copy_bigint(BigInt *dest, const BigInt *src) {
-    // Assuming 16-byte alignment
+    
     uint4 *dest_vec = (uint4*)dest->data;
     const uint4 *src_vec = (const uint4*)src->data;
     
-    dest_vec[0] = src_vec[0];  // Loads/stores 4 words at once
+    dest_vec[0] = src_vec[0];  
     dest_vec[1] = src_vec[1];
 }
 
@@ -58,11 +58,11 @@ __device__ __forceinline__ int compare_bigint(const BigInt *a, const BigInt *b) 
         uint32_t a_word = a->data[i];
         uint32_t b_word = b->data[i];
         
-        // Compute comparison results using arithmetic
+        
         uint32_t gt_mask = (a_word > b_word) ? 0xFFFFFFFF : 0;
         uint32_t lt_mask = (a_word < b_word) ? 0xFFFFFFFF : 0;
         
-        // Update gt/lt only if all previous words were equal
+        
         uint32_t update_mask = (gt == 0 && lt == 0) ? 0xFFFFFFFF : 0;
         gt |= (gt_mask & update_mask);
         lt |= (lt_mask & update_mask);
