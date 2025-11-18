@@ -147,9 +147,9 @@ __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_1
                                          const BigInt* min_val, const BigInt* max_val) {
     
     BigInt range;
+    
     bool borrow = false;
-    
-    
+    #pragma unroll
     for (int i = 0; i < BIGINT_WORDS; ++i) {
         uint64_t diff = (uint64_t)max_val->data[i] - (uint64_t)min_val->data[i] - (borrow ? 1 : 0);
         range.data[i] = (uint32_t)diff;
@@ -158,6 +158,7 @@ __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_1
     
     
     BigInt random;
+    #pragma unroll
     for (int w = 0; w < BIGINT_WORDS; w += 4) {
         uint4 r = curand4(state);
         if (w + 0 < BIGINT_WORDS) random.data[w + 0] = r.x;
@@ -166,7 +167,9 @@ __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_1
         if (w + 3 < BIGINT_WORDS) random.data[w + 3] = r.w;
     }
     
+    
     int highest_word = BIGINT_WORDS - 1;
+    #pragma unroll
     while (highest_word >= 0 && range.data[highest_word] == 0) {
         highest_word--;
     }
@@ -180,15 +183,20 @@ __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_1
         mask |= mask >> 8;
         mask |= mask >> 16;
         
-        random.data[highest_word] &= mask;
+        
+        asm volatile ("and.b32 %0, %1, %2;" 
+                     : "=r"(random.data[highest_word]) 
+                     : "r"(random.data[highest_word]), "r"(mask));
         
         
+        #pragma unroll
         for (int i = highest_word + 1; i < BIGINT_WORDS; ++i) {
-            random.data[i] = 0;
+            asm volatile ("mov.b32 %0, 0;" : "=r"(random.data[i]));
         }
         
         
         bool greater = false;
+        #pragma unroll
         for (int i = BIGINT_WORDS - 1; i >= 0; --i) {
             if (random.data[i] > range.data[i]) {
                 greater = true;
@@ -198,25 +206,44 @@ __device__ void generate_random_in_range(BigInt* result, curandStatePhilox4_32_1
             }
         }
         
+        
         if (greater) {
-            
+            #pragma unroll
             for (int i = 0; i < BIGINT_WORDS; ++i) {
-                random.data[i] = random.data[i] % (range.data[i] + 1);
+                uint32_t divisor = range.data[i] + 1;
+                if (divisor != 0) {  
+                    asm volatile ("rem.u32 %0, %1, %2;" 
+                                 : "=r"(random.data[i]) 
+                                 : "r"(random.data[i]), "r"(divisor));
+                }
+                
             }
         }
     }
     
-    
-    bool carry = false;
-    
+    #pragma unroll
     for (int i = 0; i < BIGINT_WORDS; ++i) {
-        uint64_t sum = (uint64_t)random.data[i] + (uint64_t)min_val->data[i] + (carry ? 1 : 0);
-        result->data[i] = (uint32_t)sum;
-        carry = (sum > 0xFFFFFFFFULL);
+        uint32_t r_word = random.data[i];
+        uint32_t min_word = min_val->data[i];
+        
+        if (i == 0) {
+            
+            asm volatile ("add.cc.u32 %0, %1, %2;" 
+                         : "=r"(result->data[0]) 
+                         : "r"(r_word), "r"(min_word));
+        } else if (i == BIGINT_WORDS - 1) {
+            
+            asm volatile ("addc.u32 %0, %1, %2;" 
+                         : "=r"(result->data[i]) 
+                         : "r"(r_word), "r"(min_word));
+        } else {
+            
+            asm volatile ("addc.cc.u32 %0, %1, %2;" 
+                         : "=r"(result->data[i]) 
+                         : "r"(r_word), "r"(min_word));
+        }
     }
 }
-
-
 __constant__ BigInt d_min_bigint;
 __constant__ BigInt d_max_bigint;
 __constant__ uint8_t d_target[20];
