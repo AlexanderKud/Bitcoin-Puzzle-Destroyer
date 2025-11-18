@@ -153,10 +153,6 @@ __device__ __forceinline__ void point_copy_jac(ECPointJac *dest, const ECPointJa
 __device__ __forceinline__ void sub_mod_device_fast(BigInt *res, const BigInt *a, const BigInt *b);
 
 
-__device__ __forceinline__ void bigint_sub_nored(BigInt *r, const BigInt *a, const BigInt *b) {
-    ptx_u256Sub(r, a, b);
-}
-
 __device__ __forceinline__ void add_9word(uint32_t r[9], const uint32_t addend[9]) {
     
     asm volatile(
@@ -1166,7 +1162,7 @@ __device__ void jacobian_to_hash160_direct(const ECPointJac *P, uint8_t hash160_
     
     
     
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 20; i++) {
         hash160_out[i] = full_hash[i];
     }
 }
